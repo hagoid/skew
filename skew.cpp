@@ -274,7 +274,7 @@ int najdi(int n, int pocet = 0, permutation **zoznam = NULL){
 	for(int i=0;i<pocet;i++) check[i]=false;
 	permutation *phi = new permutation(n);
 	//cout << "Nasli sme:\n";
-	for(k = 1; k<=1; k++){
+	for(k = 1; k<=n; k++){
 		if(n%k == 0){
 			for(t = 1; t <= n/k; t++){
 				if(gcd(n/k, t) == 1){
@@ -415,6 +415,7 @@ int main(){
 	bool copf[300];
 	permutation *phi;
 	dok = dokco = dokau = 0;
+    /*
 	for(int i = 2; i<=52; i++){
 		naozaj = 0;
 		conaozaj = 0;
@@ -477,9 +478,9 @@ int main(){
 		//for(int j=0; j<conaozaj; j++) delete cozoznam[j];
 	}
 	printf("dokopy auto %3d; copf %3d; zvysok %3d; dokopy %4d\n",dokau,dokco,dok,dok+dokau+dokco);
-	
+	*/
 	f.close();
-	/*
+
 	int max = 0, nmax=1, sucet = 0;
 	for(n=2;n<=500;n++){
 		//cout << "n = " <<n<<"\n\n";
@@ -495,5 +496,5 @@ int main(){
 	}
 	cout << "dokopy " << sucet << "\n";
 	cout << "max: "<< nmax << " " << max << "\n";
-	*/
+
 }
