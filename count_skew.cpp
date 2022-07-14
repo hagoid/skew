@@ -74,12 +74,14 @@ struct Number {
     std::vector<CoprimesByOrder> coprimesByOrder;
     std::vector<int> divisors;
     std::vector<int> coprimes;
-    int n;
-    int powerOfTwo;
-    int phi;
-    int nskew;
-    bool squareFree;
+    int n;//TODO: typ iny ako int
+    int powerOfTwo = 0;
+    int phi = 0;
+    int nskew = 0;
+    bool squareFree = true;
 };
+
+void computeOrders(Number &number);
 
 int powerOfTwo(int n) {
     return (n & (~(n - 1)));
@@ -89,12 +91,18 @@ int powerOfTwo(int n) {
 //std::array<Number, N_1> numberCache = {};
 Number numberCache[N_1] = {};
 
-Number &getNumber(int n) {
-    return numberCache[n];
+Number &getNumber(int n) {//TODO: const
+    auto &number = numberCache[n];
+    computeOrders(number);
+    return number;
 }
 
-Number factorize(int n) {
-    Number number = {.n = n, .powerOfTwo = powerOfTwo(n), .phi = 0, .nskew = 0, .squareFree = true};
+void factorize(Number& number) {
+    if (number.powerOfTwo != 0) {
+        return;
+    }
+    auto n = number.n;
+    number.powerOfTwo = powerOfTwo(n);
     if (n != 0) {
         n /= number.powerOfTwo;
         for (const auto p: primes) {
@@ -111,10 +119,13 @@ Number factorize(int n) {
             }
         }
     }
-    return number;
 }
 
 void computePhi(Number &number) {
+    if (number.phi != 0) {
+        return;
+    }
+    factorize(number);
     number.phi = number.n;
     if (number.powerOfTwo > 1) {
         number.phi -= number.phi / 2;
@@ -124,8 +135,7 @@ void computePhi(Number &number) {
     }
 }
 
-
-int findMaxPrime(const Number &number) {
+int getMaxPrime(const Number &number) {
     if (number.oddFactors.empty()) {
         if (number.powerOfTwo == 1) {
             return 1;
@@ -136,6 +146,9 @@ int findMaxPrime(const Number &number) {
 }
 
 void computeOrders(Number &number) {
+    if (!number.coprimes.empty()) {
+        return;
+    }
     const auto n = number.n;
     if (n == 0) {
         return;
@@ -145,7 +158,7 @@ void computeOrders(Number &number) {
     if (n == 1) {
         return;
     }
-    for (int e = 1; e <= n; ++e) {
+    for (int e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
         const auto d = gcd(n, e);
         if (d == e) {
             number.divisors.push_back(e);
@@ -297,7 +310,7 @@ int count(const Number &number) {
         } else if (const auto a_b = isAB(number)) {
             nskew = a_b;
         } else {
-            const auto maxPrime = findMaxPrime(number);
+            const auto maxPrime = getMaxPrime(number);
             for (int s = 1; s < (n + 1) / 2; ++s) {
                 const auto gcd_n_s = gcd(n, s);
 
@@ -323,7 +336,7 @@ int count(const Number &number) {
 
                 const auto &number_n_div_possible_d = getNumber(n / maxPrime / possible_d);
                 std::vector<int> possible_ds = {};
-                for (const auto &small_d: number_n_div_possible_d.divisors) {
+                for (const auto small_d: number_n_div_possible_d.divisors) {
                     const auto d = small_d * possible_d;
                     if (d == 1) {
                         continue;
@@ -381,8 +394,7 @@ int count(const Number &number) {
 int main() {
     computePrimes();
     for (int i = 0; i <= N; ++i) {
-        numberCache[i] = factorize(i);
-        computeOrders(numberCache[i]);
+        numberCache[i].n = i;
     }
     for (int n = 1; n <= N; n++) {
         auto &number = getNumber(n);
