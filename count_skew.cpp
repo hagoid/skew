@@ -72,17 +72,13 @@ struct CoprimesByOrder {
     int order;
 };
 
-struct Divisor {
-    std::vector<int> gcd_with;//TODO: potrebujem?
-    int divisor;
-};
-
 struct Number {
     std::vector<int> oddFactors;//TODO: gcd ratat z faktorizacie
     std::vector<int> orders;// TODO: s v deliteli n
     std::vector<int> orders_index;
     std::vector<CoprimesByOrder> coprimesByOrder;
-    std::vector<Divisor> divisors;
+    std::vector<int> divisors;
+    std::vector<int> coprimes;
     int n;
     int powerOfTwo;
     int phi;
@@ -150,35 +146,24 @@ void computeOrders(Number &number) {
         return;
     }
     computePhi(number);
+    number.coprimes.reserve(number.phi);
     if (n == 1) {
         return;
     }
-    for (int e = 1; e < n; ++e) {
+    for (int e = 1; e <= n; ++e) {
         const auto d = gcdPrecompute(n, e);
         if (d == e) {
-            number.divisors.emplace_back();
-            auto &divisor = number.divisors.back();
-            divisor.divisor = e;
-            if (d == 1) {
-                divisor.gcd_with.reserve(number.phi);
-            } else {
-                const auto &n_e = getNumber(n / e);
-                divisor.gcd_with.reserve(n_e.phi);
-                const auto &n_e_coprimes = n_e.divisors[0].gcd_with;
-                std::transform(n_e_coprimes.begin(), n_e_coprimes.end(), std::back_inserter(divisor.gcd_with),
-                               [e](const auto &a) { return e * a; });
-            }
+            number.divisors.push_back(e);
         }
         if (d == 1) {
-            number.divisors[0].gcd_with.push_back(e);
+            number.coprimes.push_back(e);
         }
     }
-    number.divisors.push_back({.gcd_with = {n}, .divisor = n});
+    number.divisors.shrink_to_fit();//TODO: count?
     number.orders.resize(n, 0);
     number.orders[1] = 1;
     std::set<int> orders;
-    const auto &coprimes = number.divisors[0].gcd_with;
-    for (const auto c: coprimes) {
+    for (const auto c: number.coprimes) {
         if (number.orders[c] != 0) {
             continue;
         }
@@ -191,10 +176,12 @@ void computeOrders(Number &number) {
         } while (power != 1); //TODO: number.orders[power] == 0
         const int order = powers.size() * number.orders[power];
         const auto &orderNumber = getNumber(order);
-        for (const auto &divisor: orderNumber.divisors) {
-            const auto o = order / divisor.divisor;
+        for (const auto divisor: orderNumber.divisors) {
+            const auto o = order / divisor;
+            const auto &oNumber = getNumber(o);
             orders.insert(o);
-            for (const auto div: divisor.gcd_with) {
+            for (const auto cop: oNumber.coprimes) {
+                const auto div = cop * divisor;//TODO: rename
                 if (div >= powers.size()) {
                     break;
                 }
@@ -208,7 +195,7 @@ void computeOrders(Number &number) {
         number.coprimesByOrder.emplace_back();
         auto &coprimesByOrder = number.coprimesByOrder.back();
         coprimesByOrder.order = o;
-        for (const auto coprime: coprimes) {
+        for (const auto coprime: number.coprimes) {
             if (number.orders[coprime] == o) {
                 coprimesByOrder.coprimes.push_back(coprime);
             }
@@ -226,8 +213,8 @@ int isPQ(const Number &number) {
 }
 
 int isAB(const Number &number) {
-    for (const auto &divisor: number.divisors) {
-        const auto &a = getNumber(divisor.divisor);
+    for (const auto divisor: number.divisors) {
+        const auto &a = getNumber(divisor);
         const auto &b = getNumber(number.n / a.n);
         if (a.n == 1) {
             continue;
@@ -274,8 +261,7 @@ PROFILE bool computeHelpSums(int s, const Number &number, int possible_d,
     return atLeastOne;
 }
 
-PROFILE int computeHelpSumsOrder(int s, int n_h) {//TODO: toto treba vobec robit?
-    const auto &number_n_h = getNumber(n_h);
+PROFILE int computeHelpSumsOrder(int s, const Number &number_n_h) {//TODO: toto treba vobec robit?
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
     orderSumsCount = number_n_h.orders[s % number_n_h.n];
     const auto h_value = helpSums[orderSumsCount] % number_n_h.n;
@@ -297,8 +283,8 @@ PROFILE int scitaj(int d, int e, int n_div_d, int r) {
     return vysledok;
 }
 
-PROFILE bool overScitane(int vysledok, int s, int n_div_d, int small_h) {
-    return ((s - 1) - vysledok * small_h) % n_div_d == 0;//TODO: gcd(s-1, n_div_d)
+PROFILE bool overScitane(int big_vysledok, int s, int n_div_d, int small_small_h) {
+    return ((s - 1) - big_vysledok * small_small_h) % n_div_d == 0;//TODO: gcd(s-1, n_div_d)
 }
 
 PROFILE bool divisible3(int a, int b) {
@@ -343,7 +329,7 @@ int count(const Number &number) {
                 const auto &number_n_div_possible_d = getNumber(n / maxPrime / possible_d);
                 std::vector<int> possible_ds = {};
                 for (const auto &small_d: number_n_div_possible_d.divisors) {
-                    const auto d = small_d.divisor * possible_d;
+                    const auto d = small_d * possible_d;
                     if (d == 1) {
                         continue;
                     }
@@ -360,9 +346,10 @@ int count(const Number &number) {
 //                    for (const auto& small_gcd_n_h : number_n_div_d.divisors) {
                     const auto size = number_n_div_d.divisors.size() - 1;
                     for (size_t iii = 0; iii < size; ++iii) {
-                        const auto &small_gcd_n_h = number_n_div_d.divisors[iii];
-                        const auto gcd_n_h = small_gcd_n_h.divisor * d;
-                        const auto r = computeHelpSumsOrder(s, n / gcd_n_h);
+                        const auto small_gcd_n_h = number_n_div_d.divisors[iii];
+                        const auto gcd_n_h = small_gcd_n_h * d;
+                        const auto &number_n_h = getNumber(n / gcd_n_h);
+                        const auto r = computeHelpSumsOrder(s, number_n_h);
                         const auto &number_r = getNumber(r);
                         if (d > number_r.phi) {
                             continue;
@@ -376,9 +363,9 @@ int count(const Number &number) {
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
-                            const auto vysledok = scitaj(d, e, n_div_d, r);
-                            for (const auto small_h: small_gcd_n_h.gcd_with) {
-                                if (overScitane(vysledok, s, n_div_d, small_h)) {
+                            const auto big_vysledok = scitaj(d, e, n_div_d, r) * small_gcd_n_h;
+                            for (const auto small_small_h: number_n_h.coprimes) {
+                                if (overScitane(big_vysledok, s, n_div_d, small_small_h)) {
                                     nskew++;
                                 }
                             }
