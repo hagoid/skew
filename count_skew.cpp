@@ -338,10 +338,10 @@ int count(const Number &number) {
 //                    const int rH = order(n_div_d, s);//TODO:
                     const auto &number_n_div_d = getNumber(n_div_d);
                     const int rH = number_n_div_d.orders[s];
-//                    for (const auto& small_gcd_n_h : number_n_div_d.divisors) {
-                    const auto size = number_n_div_d.divisors.size() - 1;
-                    for (size_t iii = 0; iii < size; ++iii) {
-                        const auto small_gcd_n_h = number_n_div_d.divisors[iii];
+                    for (const auto small_gcd_n_h : number_n_div_d.divisors) {
+                        if (small_gcd_n_h == number_n_div_d.n) {
+                            break;
+                        }
                         const auto gcd_n_h = small_gcd_n_h * d;
                         const auto &number_n_h = getNumber(n / gcd_n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
@@ -361,7 +361,7 @@ int count(const Number &number) {
                             const auto big_vysledok = scitaj(d, e, n_div_d, r) * small_gcd_n_h;
                             for (const auto small_small_h: number_n_h.coprimes) {
                                 if (overScitane(big_vysledok, s, n_div_d, small_small_h)) {
-                                    nskew++;
+                                    nskew++;//TODO: neda sa toto rychlejsie?
                                 }
                             }
                         }
