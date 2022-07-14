@@ -9,23 +9,26 @@
 //#define PROFILE __attribute__((noinline))
 #define PROFILE
 
-constexpr int N = 10000;
-constexpr int N_1 = N + 1;
-//constexpr int N_1_2 = N_1 * N_1;
+using Scalar = std::int32_t;
+using DoubleScalar = std::int64_t;
 
-std::vector<int> primes = {};
+constexpr Scalar N = 10000;
+constexpr Scalar N_1 = N + 1;
+//constexpr Scalar N_1_2 = N_1 * N_1;
 
-//std::vector<int> gcdCache = std::vector<int>(N_1_2, 0);
-//std::vector<int> helpSums = std::vector<int>(N_1, 0);
-//std::array<int, N_1_2> gcdCache = {};
-//std::array<int, N_1> helpSums = {};
-//int gcdCache[N_1_2] = {};
-int helpSums[N_1] = {};
-int helpSumsCount = 0;
-int orderSumsCount = 0;
+std::vector<Scalar> primes = {};
+
+//std::vector<Scalar> gcdCache = std::vector<Scalar>(N_1_2, 0);
+//std::vector<Scalar> helpSums = std::vector<Scalar>(N_1, 0);
+//std::array<Scalar, N_1_2> gcdCache = {};
+//std::array<Scalar, N_1> helpSums = {};
+//Scalar gcdCache[N_1_2] = {};
+Scalar helpSums[N_1] = {};
+Scalar helpSumsCount = 0;
+Scalar orderSumsCount = 0;
 
 void computePrimes() {
-    for (int i = 2; i < N; ++i) {
+    for (Scalar i = 2; i < N; ++i) {
         bool isPrime = true;
         for (const auto p: primes) {
             if (i % p == 0) {
@@ -40,16 +43,16 @@ void computePrimes() {
 }
 
 
-PROFILE int gcdCompute(int n, int k) {
+PROFILE Scalar gcdCompute(Scalar n, Scalar k) {
     while (k != 0) {
-        const int new_k = n % k;
+        const Scalar new_k = n % k;
         n = k;
         k = new_k;
     }
     return n;
 }
 
-int gcd(int n, int k) {
+Scalar gcd(Scalar n, Scalar k) {
     return gcdCompute(n, k);
 //    const auto index = n * N_1 + k;
 //    if (gcdCache[index] == 0) {
@@ -63,27 +66,27 @@ int gcd(int n, int k) {
 }
 
 struct CoprimesByOrder {
-    std::vector<int> coprimes;
-    int order;
+    std::vector<Scalar> coprimes;
+    Scalar order;
 };
 
 struct Number {
-    std::vector<int> oddFactors;//TODO: gcd ratat z faktorizacie
-    std::vector<int> orders;// TODO: s v deliteli n
-    std::vector<int> orders_index;
+    std::vector<Scalar> oddFactors;//TODO: gcd ratat z faktorizacie
+    std::vector<Scalar> orders;// TODO: s v deliteli n
+    std::vector<Scalar> orders_index;
     std::vector<CoprimesByOrder> coprimesByOrder;
-    std::vector<int> divisors;
-    std::vector<int> coprimes;
-    int n;//TODO: typ iny ako int
-    int powerOfTwo = 0;
-    int phi = 0;
-    int nskew = 0;
+    std::vector<Scalar> divisors;
+    std::vector<Scalar> coprimes;
+    Scalar n;
+    Scalar powerOfTwo = 0;
+    Scalar phi = 0;
+    Scalar nskew = 0;
     bool squareFree = true;
 };
 
 void computeOrders(Number &number);
 
-int powerOfTwo(int n) {
+Scalar powerOfTwo(Scalar n) {
     return (n & (~(n - 1)));
 }
 
@@ -91,7 +94,7 @@ int powerOfTwo(int n) {
 //std::array<Number, N_1> numberCache = {};
 Number numberCache[N_1] = {};
 
-Number &getNumber(int n) {//TODO: const
+Number &getNumber(Scalar n) {//TODO: const
     auto &number = numberCache[n];
     computeOrders(number);
     return number;
@@ -135,7 +138,7 @@ void computePhi(Number &number) {
     }
 }
 
-int getMaxPrime(const Number &number) {
+Scalar getMaxPrime(const Number &number) {
     if (number.oddFactors.empty()) {
         if (number.powerOfTwo == 1) {
             return 1;
@@ -158,7 +161,7 @@ void computeOrders(Number &number) {
     if (n == 1) {
         return;
     }
-    for (int e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
+    for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
         const auto d = gcd(n, e);
         if (d == e) {
             number.divisors.push_back(e);
@@ -170,19 +173,19 @@ void computeOrders(Number &number) {
     number.divisors.shrink_to_fit();//TODO: count?
     number.orders.resize(n, 0);
     number.orders[1] = 1;
-    std::set<int> orders;
+    std::set<Scalar> orders;
     for (const auto c: number.coprimes) {
         if (number.orders[c] != 0) {
             continue;
         }
-        std::vector<int> powers;
+        std::vector<Scalar> powers;
         powers.reserve(number.phi);
-        int power = 1;
+        DoubleScalar power = 1;
         do {
             powers.push_back(power);
             power = (power * c) % n;
         } while (power != 1); //TODO: number.orders[power] == 0
-        const int order = powers.size() * number.orders[power];
+        const Scalar order = powers.size() * number.orders[power];
         const auto &orderNumber = getNumber(order);
         for (const auto divisor: orderNumber.divisors) {
             const auto o = order / divisor;
@@ -211,7 +214,7 @@ void computeOrders(Number &number) {
     }
 }
 
-int isPQ(const Number &number) {
+Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
     if (number.powerOfTwo == 1 && number.oddFactors.size() == 2) {
         return (number.oddFactors[0] - 1) * (number.oddFactors[1] - 1);
     } else if (number.powerOfTwo == 2 && number.oddFactors.size() == 1) {
@@ -220,7 +223,7 @@ int isPQ(const Number &number) {
     return 0;
 }
 
-int isAB(const Number &number) {
+Scalar isAB(const Number &number) {
     for (const auto divisor: number.divisors) {
         const auto &a = getNumber(divisor);
         const auto &b = getNumber(number.n / a.n);
@@ -237,14 +240,14 @@ int isAB(const Number &number) {
     return 0;
 }
 
-PROFILE bool computeHelpSums(int s, const Number &number, int possible_d,
-                             int max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
+PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
+                             Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
     const auto n = number.n;
     const auto &number_n_d = getNumber(n / possible_d);
     helpSumsCount = number_n_d.orders[s];
     bool atLeastOne = possible_d != 1;
     if (!atLeastOne) {
-        int maxHelpSumsCount = 0;
+        Scalar maxHelpSumsCount = 0;
         if (n % 2 == 0) {
             const auto &number_n_p = getNumber(n / 2);
             maxHelpSumsCount = number_n_p.orders[s];
@@ -262,46 +265,46 @@ PROFILE bool computeHelpSums(int s, const Number &number, int possible_d,
     }
     if (atLeastOne) {
         helpSums[0] = 0;
-        for (int i = 1; i <= helpSumsCount; ++i) {
-            helpSums[i] = (helpSums[i - 1] * s + 1) % n;//TODO: 1 na konci nie na zaciatku
+        for (Scalar i = 1; i <= helpSumsCount; ++i) {
+            helpSums[i] = (helpSums[i - 1] * static_cast<DoubleScalar>(s) + 1) % n;//TODO: 1 na konci nie na zaciatku
         }
     }
     return atLeastOne;
 }
 
-PROFILE int computeHelpSumsOrder(int s, const Number &number_n_h) {//TODO: toto treba vobec robit?
+PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {//TODO: toto treba vobec robit?
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
     orderSumsCount = number_n_h.orders[s % number_n_h.n];
     const auto h_value = helpSums[orderSumsCount] % number_n_h.n;
     if (h_value == 0) {
         return orderSumsCount;
     } else {
-        return orderSumsCount * number_n_h.n / gcd(number_n_h.n, h_value);
+        return orderSumsCount * (number_n_h.n / gcd(number_n_h.n, h_value));
     }
 }
 
-PROFILE int scitaj(int d, int e, int n_div_d, int r) {
-    int mocnina = 1;
-    int vysledok = 0;
-    for (int i = 0; i < d; i++) {
+PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r) {
+    Scalar mocnina = 1;
+    Scalar vysledok = 0;
+    for (Scalar i = 0; i < d; i++) {
         vysledok = (vysledok + helpSums[mocnina % orderSumsCount] +
-                    (helpSums[orderSumsCount] * (mocnina / orderSumsCount))) % n_div_d;//TODO
+                    (helpSums[orderSumsCount] * static_cast<DoubleScalar>(mocnina / orderSumsCount))) % n_div_d;//TODO
         mocnina = (mocnina * e) % r;
     }
     return vysledok;
 }
 
-PROFILE bool overScitane(int big_vysledok, int s, int n_div_d, int small_small_h) {
+PROFILE bool overScitane(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, Scalar small_small_h) {
     return ((s - 1) - big_vysledok * small_small_h) % n_div_d == 0;//TODO: gcd(s-1, n_div_d)
 }
 
-PROFILE bool divisible3(int a, int b) {
+PROFILE bool divisible3(Scalar a, Scalar b) {
     return a % b != 0;
 }
 
-int count(const Number &number) {
+Scalar count(const Number &number) {
     const auto n = number.n;
-    const int phi = number.phi;
+    const auto phi = number.phi;
     auto nskew = phi;
 
     if (gcd(n, phi) > 1) {
@@ -311,7 +314,7 @@ int count(const Number &number) {
             nskew = a_b;
         } else {
             const auto maxPrime = getMaxPrime(number);
-            for (int s = 1; s < (n + 1) / 2; ++s) {
+            for (Scalar s = 1; s < (n + 1) / 2; ++s) {
                 const auto gcd_n_s = gcd(n, s);
 
                 auto possible_d = gcd_n_s;
@@ -324,7 +327,7 @@ int count(const Number &number) {
                     possible_d *= powerOfTwo(n) / powerOfTwo(possible_d);
                 }
 
-                const auto max_d = static_cast<int>(std::ceil(static_cast<float>(n) / static_cast<float>(s))) - 1;
+                const auto max_d = static_cast<Scalar>(std::ceil(static_cast<float>(n) / static_cast<float>(s))) - 1;
                 if (possible_d > max_d) {
                     continue;
                 }
@@ -335,7 +338,7 @@ int count(const Number &number) {
                 }
 
                 const auto &number_n_div_possible_d = getNumber(n / maxPrime / possible_d);
-                std::vector<int> possible_ds = {};
+                std::vector<Scalar> possible_ds = {};
                 for (const auto small_d: number_n_div_possible_d.divisors) {
                     const auto d = small_d * possible_d;
                     if (d == 1) {
@@ -348,9 +351,9 @@ int count(const Number &number) {
                 }
                 for (const auto d: possible_ds) {
                     const auto n_div_d = n / d;
-//                    const int rH = order(n_div_d, s);//TODO:
+//                    const Scalar rH = order(n_div_d, s);//TODO:
                     const auto &number_n_div_d = getNumber(n_div_d);
-                    const int rH = number_n_div_d.orders[s];
+                    const Scalar rH = number_n_div_d.orders[s];
                     for (const auto small_gcd_n_h : number_n_div_d.divisors) {
                         if (small_gcd_n_h == number_n_div_d.n) {
                             break;
@@ -371,7 +374,7 @@ int count(const Number &number) {
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
-                            const auto big_vysledok = scitaj(d, e, n_div_d, r) * small_gcd_n_h;
+                            const auto big_vysledok = scitaj(d, e, n_div_d, r) * static_cast<DoubleScalar>(small_gcd_n_h);
                             for (const auto small_small_h: number_n_h.coprimes) {
                                 if (overScitane(big_vysledok, s, n_div_d, small_small_h)) {
                                     nskew++;//TODO: neda sa toto rychlejsie?
@@ -386,17 +389,17 @@ int count(const Number &number) {
 
     printf("Total number of skew morphisms of C_%d is %d\n", n, nskew);
     printf("Check sub-total of automorphisms of C_%d is %d\n", n, phi);
-    int perc = static_cast<int>(std::round(float(100 * phi) / float(nskew)));
+    auto perc = static_cast<Scalar>(std::round(float(100 * phi) / float(nskew)));
     printf("Automorphisms account for ~%d%% of all skew morphisms.\n\n", perc);
     return nskew;
 }
 
 int main() {
     computePrimes();
-    for (int i = 0; i <= N; ++i) {
+    for (Scalar i = 0; i <= N; ++i) {
         numberCache[i].n = i;
     }
-    for (int n = 1; n <= N; n++) {
+    for (Scalar n = 1; n <= N; n++) {
         auto &number = getNumber(n);
         if (number.powerOfTwo > 16 || !number.squareFree) continue;
 
