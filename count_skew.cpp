@@ -49,22 +49,17 @@ PROFILE int gcdCompute(int n, int k) {
     return n;
 }
 
-int gcdPrecompute(int n, int k) {
+int gcd(int n, int k) {
     return gcdCompute(n, k);
 //    const auto index = n * N_1 + k;
 //    if (gcdCache[index] == 0) {
 //        if (k == 0) {
 //            gcdCache[index] = n;
 //        } else {
-//            gcdCache[index] = gcdPrecompute(k, n % k);
+//            gcdCache[index] = gcd(k, n % k);
 //        }
 //    }
 //    return gcdCache[index];
-}
-
-int gcd(int n, int k) {
-//    return gcdCache[n * N_1 + k];
-    return gcdPrecompute(n, k);
 }
 
 struct CoprimesByOrder {
@@ -151,7 +146,7 @@ void computeOrders(Number &number) {
         return;
     }
     for (int e = 1; e <= n; ++e) {
-        const auto d = gcdPrecompute(n, e);
+        const auto d = gcd(n, e);
         if (d == e) {
             number.divisors.push_back(e);
         }
@@ -222,7 +217,7 @@ int isAB(const Number &number) {
         if (a.n > b.n) {
             break;
         }
-        if (gcdPrecompute(a.n, b.n) == 1 && gcdPrecompute(a.n, b.phi) == 1 && gcdPrecompute(a.phi, b.n) == 1) {
+        if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(a.phi, b.n) == 1) {
             return a.nskew * b.nskew;
         }
     }
