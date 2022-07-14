@@ -11,7 +11,7 @@
 
 constexpr int N = 10000;
 constexpr int N_1 = N + 1;
-constexpr int N_1_2 = N_1 * N_1;
+//constexpr int N_1_2 = N_1 * N_1;
 
 std::vector<int> primes = {};
 
@@ -19,7 +19,7 @@ std::vector<int> primes = {};
 //std::vector<int> helpSums = std::vector<int>(N_1, 0);
 //std::array<int, N_1_2> gcdCache = {};
 //std::array<int, N_1> helpSums = {};
-int gcdCache[N_1_2] = {};
+//int gcdCache[N_1_2] = {};
 int helpSums[N_1] = {};
 int helpSumsCount = 0;
 int orderSumsCount = 0;
@@ -50,16 +50,16 @@ PROFILE int gcdCompute(int n, int k) {
 }
 
 int gcdPrecompute(int n, int k) {
-//    return gcdCompute(n, k);
-    const auto index = n * N_1 + k;
-    if (gcdCache[index] == 0) {
-        if (k == 0) {
-            gcdCache[index] = n;
-        } else {
-            gcdCache[index] = gcdPrecompute(k, n % k);
-        }
-    }
-    return gcdCache[index];
+    return gcdCompute(n, k);
+//    const auto index = n * N_1 + k;
+//    if (gcdCache[index] == 0) {
+//        if (k == 0) {
+//            gcdCache[index] = n;
+//        } else {
+//            gcdCache[index] = gcdPrecompute(k, n % k);
+//        }
+//    }
+//    return gcdCache[index];
 }
 
 int gcd(int n, int k) {
