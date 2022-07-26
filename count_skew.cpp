@@ -65,22 +65,19 @@ Scalar gcd(Scalar n, Scalar k) {
 //    return gcdCache[index];
 }
 
-struct CoprimesByOrder {
-    std::vector<Scalar> coprimes;
-    Scalar order;
-};
 
-struct Number {
+struct Number {//TODO: Cn
     std::vector<Scalar> oddFactors;//TODO: gcd ratat z faktorizacie
     std::vector<Scalar> orders;// TODO: s v deliteli n
-    std::vector<Scalar> orders_index;
-    std::vector<CoprimesByOrder> coprimesByOrder;
+    std::vector<Scalar> order2OrderIndex;
+    std::vector<Scalar> orderIndex2CoprimesBegin;
     std::vector<Scalar> divisors;
     std::vector<Scalar> coprimes;
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
     Scalar nskew = 0;
+    int computed = 0;
     bool squareFree = true;
 };
 
@@ -148,6 +145,10 @@ Scalar getMaxPrime(const Number &number) {
     return number.oddFactors.back();
 }
 
+int counter = 0;
+int byte_counter = 0;
+std::set<int> toCountWithMultiples = {};
+
 void computeOrders(Number &number) {
     if (!number.coprimes.empty()) {
         return;
@@ -161,6 +162,11 @@ void computeOrders(Number &number) {
     if (n == 1) {
         return;
     }
+    ++counter;
+    toCountWithMultiples.insert(number.n);
+//    if (++number.toCountWithMultiples > 1) {
+//        printf("toCountWithMultiples %d %d\n", number.n, number.toCountWithMultiples);
+//    }
     for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
         const auto d = gcd(n, e);
         if (d == e) {
@@ -174,12 +180,14 @@ void computeOrders(Number &number) {
     number.orders.resize(n, 0);
     number.orders[1] = 1;
     std::set<Scalar> orders;
+    std::vector<Scalar> powers; //TODO: global
+    powers.reserve(number.phi);
+    orders.insert(1);
     for (const auto c: number.coprimes) {
         if (number.orders[c] != 0) {
             continue;
         }
-        std::vector<Scalar> powers;
-        powers.reserve(number.phi);
+        powers.clear();
         DoubleScalar power = 1;
         do {
             powers.push_back(power);
@@ -194,24 +202,32 @@ void computeOrders(Number &number) {
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
                 if (div >= powers.size()) {
-                    break;
+                    continue;//TODO: ordered?
                 }
                 number.orders[powers[div]] = o;
             }
         }
     }
-    number.orders_index.resize(number.phi + 1, -1);
+    number.order2OrderIndex.resize(number.phi + 1, -1);
+    number.orderIndex2CoprimesBegin.reserve(orders.size() + 1);
+    number.orderIndex2CoprimesBegin.push_back(0);
+    std::vector<Scalar> coprimes; //TODO: global
+    coprimes.reserve(number.phi);
     for (const auto o: orders) {
-        number.orders_index[o] = number.coprimesByOrder.size();
-        number.coprimesByOrder.emplace_back();
-        auto &coprimesByOrder = number.coprimesByOrder.back();
-        coprimesByOrder.order = o;
+        number.order2OrderIndex[o] = number.orderIndex2CoprimesBegin.size() - 1;
         for (const auto coprime: number.coprimes) {
-            if (number.orders[coprime] == o) {
-                coprimesByOrder.coprimes.push_back(coprime);
+            if (number.orders[coprime] == o) {//TODO: N^2
+                coprimes.push_back(coprime);
             }
         }
+        number.orderIndex2CoprimesBegin.push_back(coprimes.size());
     }
+    coprimes.swap(number.coprimes);
+    byte_counter += number.orders.size();
+    byte_counter += number.coprimes.size();
+    byte_counter += number.order2OrderIndex.size();
+    byte_counter += number.orderIndex2CoprimesBegin.size();
+    byte_counter += number.divisors.size();
 }
 
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
@@ -234,7 +250,7 @@ Scalar isAB(const Number &number) {
             break;
         }
         if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(a.phi, b.n) == 1) {
-            return a.nskew * b.nskew;
+            return a.nskew * b.nskew;//TODO:
         }
     }
     return 0;
@@ -302,6 +318,8 @@ PROFILE bool divisible3(Scalar a, Scalar b) {
     return a % b != 0;
 }
 
+std::vector<Scalar> possible_ds = {};
+
 Scalar count(const Number &number) {
     const auto n = number.n;
     const auto phi = number.phi;
@@ -338,7 +356,7 @@ Scalar count(const Number &number) {
                 }
 
                 const auto &number_n_div_possible_d = getNumber(n / maxPrime / possible_d);
-                std::vector<Scalar> possible_ds = {};
+                possible_ds.clear();
                 for (const auto small_d: number_n_div_possible_d.divisors) {
                     const auto d = small_d * possible_d;
                     if (d == 1) {
@@ -365,12 +383,14 @@ Scalar count(const Number &number) {
                         if (d > number_r.phi) {
                             continue;
                         }
-                        const auto order_index = number_r.orders_index[d];
+                        const auto order_index = number_r.order2OrderIndex[d];
                         if (order_index == -1) {
                             continue;
                         }
-                        const auto &coprimesByOrder = number_r.coprimesByOrder[order_index];
-                        for (const auto e: coprimesByOrder.coprimes) {
+                        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];
+                        const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
+                        for (std::size_t i = begin; i < end; ++i) {
+                            const auto e = number_r.coprimes[i];
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
@@ -386,24 +406,99 @@ Scalar count(const Number &number) {
             }
         }
     }
+    return nskew;
+}
 
+void print(const Number &number) {
+    const auto n = number.n;
+    const auto phi = number.phi;
+    const auto nskew = number.nskew;
     printf("Total number of skew morphisms of C_%d is %d\n", n, nskew);
     printf("Check sub-total of automorphisms of C_%d is %d\n", n, phi);
     auto perc = static_cast<Scalar>(std::round(float(100 * phi) / float(nskew)));
     printf("Automorphisms account for ~%d%% of all skew morphisms.\n\n", perc);
-    return nskew;
+}
+
+void clear(Number &number) {
+    if (!number.coprimes.empty()) {
+
+        byte_counter -= number.orders.size();
+        byte_counter -= number.coprimes.size();
+        byte_counter -= number.order2OrderIndex.size();
+        byte_counter -= number.orderIndex2CoprimesBegin.size();
+        byte_counter -= number.divisors.size();
+
+        number.orders = std::vector<Scalar>{};
+        number.coprimes = std::vector<Scalar>{};
+        number.order2OrderIndex = std::vector<Scalar>{};
+        number.orderIndex2CoprimesBegin = std::vector<Scalar>{};
+        number.divisors = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
+        --counter;
+        toCountWithMultiples.erase(number.n);
+    }
 }
 
 int main() {
     computePrimes();
+    possible_ds.reserve(N);
     for (Scalar i = 0; i <= N; ++i) {
         numberCache[i].n = i;
     }
-    for (Scalar n = 1; n <= N; n++) {
-        auto &number = getNumber(n);
-        if (number.powerOfTwo > 16 || !number.squareFree) continue;
+    const Scalar A = 1;
+    const Scalar B = N;
 
-        number.nskew = count(number);
+    int maxByteCounter = 0;
+    int maxCounter = 0;
+
+    toCountWithMultiples.insert(1);
+    for (const auto p : primes) {
+        toCountWithMultiples.insert(p);
+    }
+
+    while (!toCountWithMultiples.empty()) {
+        const auto p = *toCountWithMultiples.rbegin();
+        const auto lowerMultiplier = (A + p - 1) / p;
+        const auto upperMultiplier = B / p;
+        for (auto multiplier = upperMultiplier; multiplier >= lowerMultiplier; --multiplier) {
+            const auto n = multiplier * p;
+
+            auto &number = numberCache[n];
+            factorize(number);
+            bool run = false;
+            if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
+                run = true;
+                computeOrders(number);
+                number.nskew = count(number);
+            }
+
+            clear(number);
+
+            if (counter > maxCounter) {
+                maxCounter = counter;
+            }
+            if (byte_counter > maxByteCounter) {
+                maxByteCounter = byte_counter;
+            }
+            if (run) {
+                printf("%d %d %d %d %d: ", n, maxCounter, counter, maxByteCounter, byte_counter);
+//                for (const auto &c : toCountWithMultiples) {
+//                    printf("%d ", c);
+//                }
+                printf("\n");
+            }
+        }
+//        for (auto multiplier = 1; multiplier < lowerMultiplier; ++multiplier) {
+//            const auto n = multiplier * p;
+//            auto &number = numberCache[n];
+//            clear(number);
+//        }
+        toCountWithMultiples.erase(p);
+    }
+    for (auto n = A; n <= B; ++n) {
+        const auto &number = numberCache[n];
+        if (number.nskew != 0) {
+            print(number);
+        }
     }
 
     return 0;
