@@ -73,6 +73,7 @@ struct Number {//TODO: Cn
     std::vector<Scalar> orderIndex2CoprimesBegin;
     std::vector<Scalar> divisors;
     std::vector<Scalar> coprimes;
+    std::vector<Scalar> inverses;
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
@@ -179,6 +180,8 @@ void computeOrders(Number &number) {
     number.divisors.shrink_to_fit();//TODO: count?
     number.orders.resize(n, 0);
     number.orders[1] = 1;
+    number.inverses.resize(n, 0);
+    number.inverses[1] = 1;
     std::set<Scalar> orders;
     std::vector<Scalar> powers; //TODO: global
     powers.reserve(number.phi);
@@ -207,6 +210,9 @@ void computeOrders(Number &number) {
                 number.orders[powers[div]] = o;
             }
         }
+        for (std::size_t i = 1; i < powers.size(); ++i) {
+            number.inverses[powers[i]] = powers[powers.size() - i];
+        }
     }
     number.order2OrderIndex.resize(number.phi + 1, -1);
     number.orderIndex2CoprimesBegin.reserve(orders.size() + 1);
@@ -228,6 +234,7 @@ void computeOrders(Number &number) {
     byte_counter += number.order2OrderIndex.size();
     byte_counter += number.orderIndex2CoprimesBegin.size();
     byte_counter += number.divisors.size();
+    byte_counter += number.inverses.size();
 }
 
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
@@ -314,11 +321,41 @@ PROFILE bool overScitane(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, Sc
     return ((s - 1) - big_vysledok * small_small_h) % n_div_d == 0;//TODO: gcd(s-1, n_div_d)
 }
 
+PROFILE Scalar countCoprimeSolutions(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, const Number &number_n_h) {
+    const auto a = big_vysledok % n_div_d; // TODO: reuse
+    const auto b = (s - 1) % n_div_d;
+    // ax = b (%n_div_d)
+    const auto gcd_a = gcd(n_div_d, a);
+    const auto gcd_b = gcd(n_div_d, b); //TODO: reuse
+    if (gcd_b % gcd_a != 0) {
+        return 0;
+    }
+    const auto number = getNumber(n_div_d / gcd_a);
+    const auto x = b == 0 ? 0 : (number.inverses[a / gcd_a] * b / gcd_a) % number.n;
+    Scalar nskew = 0;
+    for (Scalar sol = x; sol < number_n_h.n; sol += number.n) {
+        if (number_n_h.orders[sol] != 0) {
+            ++nskew;
+        }
+    }
+    return nskew;
+}
+
 PROFILE bool divisible3(Scalar a, Scalar b) {
     return a % b != 0;
 }
 
 std::vector<Scalar> possible_ds = {};
+
+PROFILE Scalar countForE(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, const Number &number_n_h) {
+    Scalar nskew = 0;
+    for (const auto small_small_h: number_n_h.coprimes) {
+        if (overScitane(big_vysledok, s, n_div_d, small_small_h)) {
+            nskew++;//TODO: neda sa toto rychlejsie?
+        }
+    }
+    return nskew;
+}
 
 Scalar count(const Number &number) {
     const auto n = number.n;
@@ -395,11 +432,7 @@ Scalar count(const Number &number) {
                                 continue;
                             }
                             const auto big_vysledok = scitaj(d, e, n_div_d, r) * static_cast<DoubleScalar>(small_gcd_n_h);
-                            for (const auto small_small_h: number_n_h.coprimes) {
-                                if (overScitane(big_vysledok, s, n_div_d, small_small_h)) {
-                                    nskew++;//TODO: neda sa toto rychlejsie?
-                                }
-                            }
+                            nskew += countCoprimeSolutions(big_vysledok, s, n_div_d, number_n_h);
                         }
                     }
                 }
@@ -427,12 +460,14 @@ void clear(Number &number) {
         byte_counter -= number.order2OrderIndex.size();
         byte_counter -= number.orderIndex2CoprimesBegin.size();
         byte_counter -= number.divisors.size();
+        byte_counter -= number.inverses.size();
 
         number.orders = std::vector<Scalar>{};
         number.coprimes = std::vector<Scalar>{};
         number.order2OrderIndex = std::vector<Scalar>{};
         number.orderIndex2CoprimesBegin = std::vector<Scalar>{};
         number.divisors = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
+        number.inverses = std::vector<Scalar>{};
         --counter;
         toCountWithMultiples.erase(number.n);
     }
@@ -480,11 +515,11 @@ int main() {
                 maxByteCounter = byte_counter;
             }
             if (run) {
-                printf("%d %d %d %d %d: ", n, maxCounter, counter, maxByteCounter, byte_counter);
+//                printf("%d %d %d %d %d: ", n, maxCounter, counter, maxByteCounter, byte_counter);
 //                for (const auto &c : toCountWithMultiples) {
 //                    printf("%d ", c);
 //                }
-                printf("\n");
+//                printf("\n");
             }
         }
 //        for (auto multiplier = 1; multiplier < lowerMultiplier; ++multiplier) {
