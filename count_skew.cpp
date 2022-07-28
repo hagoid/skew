@@ -450,6 +450,16 @@ void print(const Number &number) {
     printf("Automorphisms account for ~%d%% of all skew morphisms.\n\n", perc);
 }
 
+void fprint(const Number &number, std::ostream& stream) {
+    const auto n = number.n;
+    const auto phi = number.phi;
+    const auto nskew = number.nskew;
+    stream << "Total number of skew morphisms of C_" << n << " is " << nskew << "\n";
+    stream << "Check sub-total of automorphisms of C_" << n << " is " << phi << "\n";
+    auto perc = static_cast<Scalar>(std::round(float(100 * phi) / float(nskew)));
+    stream << "Automorphisms account for ~" << perc << "% of all skew morphisms.\n\n";
+}
+
 void clear(Number &number) {
     if (!number.coprimes.empty()) {
         number.orders = std::vector<Scalar>{};
@@ -488,6 +498,7 @@ int main() {
             if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
                 computeOrders(number);
                 number.nskew = count(number);
+                fprint(number, std::cerr);
             }
 
             clear(number);
