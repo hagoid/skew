@@ -94,6 +94,9 @@ Scalar powerOfTwo(Scalar n) {
 Number numberCache[N_1] = {};
 
 Number &getNumber(Scalar n) {//TODO: const
+    if (n > N) {
+        throw "";
+    }
     auto &number = numberCache[n];
     computeOrders(number);
     return number;
