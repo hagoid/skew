@@ -23,7 +23,7 @@ std::vector<Scalar> primes = {};
 //std::array<Scalar, N_1_2> gcdCache = {};
 //std::array<Scalar, N_1> helpSums = {};
 //Scalar gcdCache[N_1_2] = {};
-Scalar helpSums[N_1] = {};
+//Scalar helpSums[N_1] = {};
 Scalar helpSumsCount = 0;
 Scalar orderSumsCount = 0;
 
@@ -261,6 +261,28 @@ Scalar isAB(const Number &number) {
     return 0;
 }
 
+DoubleScalar pow(DoubleScalar x, unsigned int y, DoubleScalar p)
+{
+    DoubleScalar res = 1;     // Initialize result
+
+    x = x % p; // Update x if it is more than or
+    // equal to p
+
+    if (x == 0) return 0; // In case x is divisible by p;
+
+    while (y > 0)
+    {
+        // If y is odd, multiply x with result
+        if (y & 1)
+            res = (res*x) % p;
+
+        // y must be even now
+        y = y>>1; // y = y/2
+        x = (x*x) % p;
+    }
+    return res;
+}
+
 PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
                              Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
     const auto n = number.n;
@@ -285,19 +307,19 @@ PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
         helpSumsCount = maxHelpSumsCount;
     }
     if (atLeastOne) {
-        helpSums[0] = 1;
-        const auto mod = n * std::max(s - 1, 1);
-        for (Scalar i = 1; i <= helpSumsCount; ++i) {
-            helpSums[i] = (helpSums[i - 1] * static_cast<DoubleScalar>(s)) % mod;
-        }
+//        helpSums[0] = 1;
+//        const auto mod = n * std::max(s - 1, 1);
+//        for (Scalar i = 1; i <= helpSumsCount; ++i) {
+//            helpSums[i] = (helpSums[i - 1] * static_cast<DoubleScalar>(s)) % mod;
+//        }
     }
     return atLeastOne;
 }
 
-PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {//TODO: toto treba vobec robit?
+PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h, Scalar n) {//TODO: toto treba vobec robit?
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
     orderSumsCount = number_n_h.orders[s % number_n_h.n];
-    const auto h_value = s == 1 ? 1 : ((helpSums[orderSumsCount] - 1) / (s - 1)) % number_n_h.n;
+    const auto h_value = s == 1 ? 1 : ((pow(s, orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) / (s - 1)) % number_n_h.n;
     if (h_value == 0) {
         return orderSumsCount;
     } else {
@@ -305,12 +327,12 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {//TODO:
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r, Scalar s) {
+PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r, Scalar s, Scalar n) {
     Scalar mocnina = 1;
     Scalar vysledok = 0;
     for (Scalar i = 0; i < d; i++) {
-        const auto increment = s == 1 ? mocnina : ((helpSums[mocnina % orderSumsCount] - 1 +
-                    ((helpSums[orderSumsCount] - 1) * static_cast<DoubleScalar>(mocnina / orderSumsCount))) / (s - 1)) % n_div_d;//TODO
+        const auto increment = s == 1 ? mocnina : ((pow(s, mocnina % orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1 +
+                    ((pow(s, orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) * static_cast<DoubleScalar>(mocnina / orderSumsCount))) / (s - 1)) % n_div_d;//TODO
         vysledok += increment;
         mocnina = (mocnina * e) % r;
     }
@@ -415,7 +437,7 @@ Scalar count(const Number &number) {
                         }
                         const auto gcd_n_h = small_gcd_n_h * d;
                         const auto &number_n_h = getNumber(n / gcd_n_h);
-                        const auto r = computeHelpSumsOrder(s, number_n_h);
+                        const auto r = computeHelpSumsOrder(s, number_n_h, n);
                         const auto &number_r = getNumber(r);
                         if (d > number_r.phi) {
                             continue;
@@ -431,7 +453,7 @@ Scalar count(const Number &number) {
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
-                            const auto big_vysledok = scitaj(d, e, n_div_d, r) * static_cast<DoubleScalar>(small_gcd_n_h);
+                            const auto big_vysledok = scitaj(d, e, n_div_d, r, s, n) * static_cast<DoubleScalar>(small_gcd_n_h);
                             nskew += countCoprimeSolutions(big_vysledok, s, n_div_d, number_n_h);
                         }
                     }
