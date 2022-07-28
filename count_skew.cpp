@@ -23,7 +23,7 @@ std::vector<Scalar> primes = {};
 //std::array<Scalar, N_1_2> gcdCache = {};
 //std::array<Scalar, N_1> helpSums = {};
 //Scalar gcdCache[N_1_2] = {};
-//Scalar helpSums[N_1] = {};
+DoubleScalar helpSums[N_1] = {};
 Scalar helpSumsCount = 0;
 Scalar orderSumsCount = 0;
 
@@ -263,24 +263,16 @@ Scalar isAB(const Number &number) {
 
 DoubleScalar pow(DoubleScalar x, unsigned int y, DoubleScalar p)
 {
-    DoubleScalar res = 1;     // Initialize result
+    if (helpSums[y] == 0) {
+        DoubleScalar res = y & 1 ? x : 1;
 
-    x = x % p; // Update x if it is more than or
-    // equal to p
+        x = pow(x, y >> 1, p);
 
-    if (x == 0) return 0; // In case x is divisible by p;
-
-    while (y > 0)
-    {
-        // If y is odd, multiply x with result
-        if (y & 1)
-            res = (res*x) % p;
-
-        // y must be even now
-        y = y>>1; // y = y/2
-        x = (x*x) % p;
+        x = (x * x) % p;
+        res = (res * x) % p;
+        helpSums[y] = res;
     }
-    return res;
+    return helpSums[y];
 }
 
 PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
@@ -307,11 +299,10 @@ PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
         helpSumsCount = maxHelpSumsCount;
     }
     if (atLeastOne) {
-//        helpSums[0] = 1;
-//        const auto mod = n * std::max(s - 1, 1);
-//        for (Scalar i = 1; i <= helpSumsCount; ++i) {
-//            helpSums[i] = (helpSums[i - 1] * static_cast<DoubleScalar>(s)) % mod;
-//        }
+        helpSums[0] = 1;
+        for (Scalar i = 1; i <= helpSumsCount; ++i) {
+            helpSums[i] = 0;
+        }
     }
     return atLeastOne;
 }
