@@ -78,7 +78,6 @@ struct Number {//TODO: Cn
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
     Scalar nskew = 0;
-    int computed = 0;
     bool squareFree = true;
 };
 
@@ -146,8 +145,6 @@ Scalar getMaxPrime(const Number &number) {
     return number.oddFactors.back();
 }
 
-int counter = 0;
-int byte_counter = 0;
 std::set<int> toCountWithMultiples = {};
 
 void computeOrders(Number &number) {
@@ -163,7 +160,6 @@ void computeOrders(Number &number) {
     if (n == 1) {
         return;
     }
-    ++counter;
     toCountWithMultiples.insert(number.n);
 //    if (++number.toCountWithMultiples > 1) {
 //        printf("toCountWithMultiples %d %d\n", number.n, number.toCountWithMultiples);
@@ -229,12 +225,6 @@ void computeOrders(Number &number) {
         number.orderIndex2CoprimesBegin.push_back(coprimes.size());
     }
     coprimes.swap(number.coprimes);
-    byte_counter += number.orders.size();
-    byte_counter += number.coprimes.size();
-    byte_counter += number.order2OrderIndex.size();
-    byte_counter += number.orderIndex2CoprimesBegin.size();
-    byte_counter += number.divisors.size();
-    byte_counter += number.inverses.size();
 }
 
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
@@ -454,21 +444,12 @@ void print(const Number &number) {
 
 void clear(Number &number) {
     if (!number.coprimes.empty()) {
-
-        byte_counter -= number.orders.size();
-        byte_counter -= number.coprimes.size();
-        byte_counter -= number.order2OrderIndex.size();
-        byte_counter -= number.orderIndex2CoprimesBegin.size();
-        byte_counter -= number.divisors.size();
-        byte_counter -= number.inverses.size();
-
         number.orders = std::vector<Scalar>{};
         number.coprimes = std::vector<Scalar>{};
         number.order2OrderIndex = std::vector<Scalar>{};
         number.orderIndex2CoprimesBegin = std::vector<Scalar>{};
         number.divisors = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.inverses = std::vector<Scalar>{};
-        --counter;
         toCountWithMultiples.erase(number.n);
     }
 }
@@ -481,9 +462,6 @@ int main() {
     }
     const Scalar A = 1;
     const Scalar B = N;
-
-    int maxByteCounter = 0;
-    int maxCounter = 0;
 
     toCountWithMultiples.insert(1);
     for (const auto p : primes) {
@@ -499,28 +477,12 @@ int main() {
 
             auto &number = numberCache[n];
             factorize(number);
-            bool run = false;
             if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
-                run = true;
                 computeOrders(number);
                 number.nskew = count(number);
             }
 
             clear(number);
-
-            if (counter > maxCounter) {
-                maxCounter = counter;
-            }
-            if (byte_counter > maxByteCounter) {
-                maxByteCounter = byte_counter;
-            }
-            if (run) {
-//                printf("%d %d %d %d %d: ", n, maxCounter, counter, maxByteCounter, byte_counter);
-//                for (const auto &c : toCountWithMultiples) {
-//                    printf("%d ", c);
-//                }
-//                printf("\n");
-            }
         }
 //        for (auto multiplier = 1; multiplier < lowerMultiplier; ++multiplier) {
 //            const auto n = multiplier * p;
