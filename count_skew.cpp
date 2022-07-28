@@ -5,14 +5,16 @@
 #include <cmath>
 #include <algorithm>
 #include <set>
+#include <boost/multiprecision/cpp_int.hpp>
 
 //#define PROFILE __attribute__((noinline))
 #define PROFILE
 
 using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;
+using QuadScalar = boost::multiprecision::int128_t;
 
-constexpr Scalar N = 10000;
+constexpr Scalar N = 100000;
 constexpr Scalar N_1 = N + 1;
 //constexpr Scalar N_1_2 = N_1 * N_1;
 
@@ -261,16 +263,16 @@ Scalar isAB(const Number &number) {
     return 0;
 }
 
-DoubleScalar pow(DoubleScalar x, unsigned int y, DoubleScalar p)
+DoubleScalar pow(QuadScalar x, unsigned int y, DoubleScalar p)
 {
     if (helpSums[y] == 0) {
-        DoubleScalar res = y & 1 ? x : 1;
+        QuadScalar res = y & 1 ? x : 1;
 
         x = pow(x, y >> 1, p);
 
         x = (x * x) % p;
         res = (res * x) % p;
-        helpSums[y] = res;
+        helpSums[y] = res.convert_to<DoubleScalar>();
     }
     return helpSums[y];
 }
