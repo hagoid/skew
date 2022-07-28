@@ -285,9 +285,10 @@ PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
         helpSumsCount = maxHelpSumsCount;
     }
     if (atLeastOne) {
-        helpSums[0] = 0;
+        helpSums[0] = 1;
+        const auto mod = n * std::max(s - 1, 1);
         for (Scalar i = 1; i <= helpSumsCount; ++i) {
-            helpSums[i] = (helpSums[i - 1] * static_cast<DoubleScalar>(s) + 1) % n;//TODO: 1 na konci nie na zaciatku
+            helpSums[i] = (helpSums[i - 1] * static_cast<DoubleScalar>(s)) % mod;
         }
     }
     return atLeastOne;
@@ -296,7 +297,7 @@ PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
 PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {//TODO: toto treba vobec robit?
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
     orderSumsCount = number_n_h.orders[s % number_n_h.n];
-    const auto h_value = helpSums[orderSumsCount] % number_n_h.n;
+    const auto h_value = s == 1 ? 1 : ((helpSums[orderSumsCount] - 1) / (s - 1)) % number_n_h.n;
     if (h_value == 0) {
         return orderSumsCount;
     } else {
@@ -304,12 +305,13 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {//TODO:
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r) {
+PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r, Scalar s) {
     Scalar mocnina = 1;
     Scalar vysledok = 0;
     for (Scalar i = 0; i < d; i++) {
-        vysledok = (vysledok + helpSums[mocnina % orderSumsCount] +
-                    (helpSums[orderSumsCount] * static_cast<DoubleScalar>(mocnina / orderSumsCount))) % n_div_d;//TODO
+        const auto increment = s == 1 ? mocnina : ((helpSums[mocnina % orderSumsCount] - 1 +
+                    ((helpSums[orderSumsCount] - 1) * static_cast<DoubleScalar>(mocnina / orderSumsCount))) / (s - 1)) % n_div_d;//TODO
+        vysledok += increment;
         mocnina = (mocnina * e) % r;
     }
     return vysledok;
