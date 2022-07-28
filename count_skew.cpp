@@ -236,10 +236,12 @@ Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
     return 0;
 }
 
+Scalar count(const Number &number);
+
 Scalar isAB(const Number &number) {
     for (const auto divisor: number.divisors) {
-        const auto &a = getNumber(divisor);
-        const auto &b = getNumber(number.n / a.n);
+        auto &a = getNumber(divisor);
+        auto &b = getNumber(number.n / a.n);
         if (a.n == 1) {
             continue;
         }
@@ -247,7 +249,13 @@ Scalar isAB(const Number &number) {
             break;
         }
         if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(a.phi, b.n) == 1) {
-            return a.nskew * b.nskew;//TODO:
+            if (a.nskew == 0) {
+                a.nskew = count(a);//TODO:
+            }
+            if (b.nskew == 0) {
+                b.nskew = count(b);
+            }
+            return a.nskew * b.nskew;
         }
     }
     return 0;
