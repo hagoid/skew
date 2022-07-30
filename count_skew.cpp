@@ -108,20 +108,36 @@ void factorize(Number& number) {
     }
     auto n = number.n;
     number.powerOfTwo = powerOfTwo(n);
+    Scalar divisorsCount = 1;
+    auto powerOfTwo = number.powerOfTwo;
+    while (powerOfTwo >>= 1)
+    {
+        divisorsCount++;
+    }
     if (n != 0) {
         n /= number.powerOfTwo;
         for (const auto p: primes) {
+            Scalar power = 1;
             if (n % p == 0) {
                 number.oddFactors.push_back(p);
                 n /= p;
+                ++power;
             }
             while (n % p == 0) {
                 number.squareFree = false;
                 n /= p;
+                ++power;
             }
+            divisorsCount *= power;
             if (n == 1) {
                 break;
             }
+        }
+    }
+    number.divisors.reserve(divisorsCount);
+    for (Scalar i = 1; i <= number.n; ++i) {
+        if (number.n % i == 0) {
+            number.divisors.push_back(i);
         }
     }
 }
@@ -170,15 +186,22 @@ void computeOrders(Number &number) {
 //        printf("toCountWithMultiples %d %d\n", number.n, number.toCountWithMultiples);
 //    }
     for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
-        const auto d = gcd(n, e);
-        if (d == e) {
-            number.divisors.push_back(e);
+        if (number.powerOfTwo > 1) {
+            if (e % 2 == 0) {
+                continue;
+            }
         }
-        if (d == 1) {
+        bool coprime = true;
+        for (const auto p : number.oddFactors) {
+            if (e % p == 0) {
+                coprime = false;
+                break;
+            }
+        }
+        if (coprime) {
             number.coprimes.push_back(e);
         }
     }
-    number.divisors.shrink_to_fit();//TODO: count?
     number.orders.resize(n, 0);
     number.orders[1] = 1;
     number.inverses.resize(n, 0);
@@ -485,8 +508,7 @@ void clear(Number &number) {
         number.orders = std::vector<Scalar>{};
         number.coprimes = std::vector<Scalar>{};
         number.order2OrderIndex = std::vector<Scalar>{};
-        number.orderIndex2CoprimesBegin = std::vector<Scalar>{};
-        number.divisors = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
+        number.orderIndex2CoprimesBegin = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.inverses = std::vector<Scalar>{};
         toCountWithMultiples.erase(number.n);
     }
