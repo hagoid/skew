@@ -168,7 +168,7 @@ Scalar getMaxPrime(const Number &number) {
 
 std::set<int> toCountWithMultiples = {};
 
-void computeOrders(Number &number) {
+void computeCoprimes(Number &number) {
     if (!number.coprimes.empty()) {
         return;
     }
@@ -202,6 +202,20 @@ void computeOrders(Number &number) {
             number.coprimes.push_back(e);
         }
     }
+}
+
+void computeOrders(Number &number) {
+    if (!number.orders.empty()) {
+        return;
+    }
+    const auto n = number.n;
+    if (n == 0) {
+        return;
+    }
+    computeCoprimes(number);
+    if (n == 1) {
+        return;
+    }
     number.orders.resize(n, 0);
     number.orders[1] = 1;
     number.inverses.resize(n, 0);
@@ -218,13 +232,14 @@ void computeOrders(Number &number) {
         DoubleScalar power = 1;
         do {
             powers.push_back(power);
-            power = (power * c) % n;
+            power = (power * c) % n;//TODO: pre vsetky delitele potom zratat, a inverse je phi - 1
         } while (power != 1); //TODO: number.orders[power] == 0
         const Scalar order = powers.size() * number.orders[power];
-        const auto &orderNumber = getNumber(order);
+        const auto &orderNumber = numberCache[order];
         for (const auto divisor: orderNumber.divisors) {
             const auto o = order / divisor;
-            const auto &oNumber = getNumber(o);
+            auto &oNumber = numberCache[o];
+            computeCoprimes(oNumber);
             orders.insert(o);
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
@@ -268,8 +283,8 @@ Scalar count(const Number &number);
 
 Scalar isAB(const Number &number) {
     for (const auto divisor: number.divisors) {
-        auto &a = getNumber(divisor);
-        auto &b = getNumber(number.n / a.n);
+        auto &a = numberCache[divisor];
+        auto &b = numberCache[number.n / a.n];
         if (a.n == 1) {
             continue;
         }
@@ -433,7 +448,7 @@ Scalar count(const Number &number) {
                     continue;
                 }
 
-                const auto &number_n_div_possible_d = getNumber(n / maxPrime / possible_d);
+                const auto &number_n_div_possible_d = numberCache[n / maxPrime / possible_d];
                 possible_ds.clear();
                 for (const auto small_d: number_n_div_possible_d.divisors) {
                     const auto d = small_d * possible_d;
@@ -457,10 +472,11 @@ Scalar count(const Number &number) {
                         const auto gcd_n_h = small_gcd_n_h * d;
                         const auto &number_n_h = getNumber(n / gcd_n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h, n);
-                        const auto &number_r = getNumber(r);
+                        auto &number_r = numberCache[r];
                         if (d > number_r.phi) {
                             continue;
                         }
+                        computeOrders(number_r);
                         const auto order_index = number_r.order2OrderIndex[d];
                         if (order_index == -1) {
                             continue;
@@ -518,7 +534,9 @@ int main() {
     computePrimes();
     possible_ds.reserve(N);
     for (Scalar i = 0; i <= N; ++i) {
-        numberCache[i].n = i;
+        auto &number = numberCache[i];
+        number.n = i;
+        computePhi(number);//TODO: lazy ak chceme pouzivat A, B
     }
     const Scalar A = 1;
     const Scalar B = N;
@@ -536,7 +554,6 @@ int main() {
             const auto n = multiplier * p;
 
             auto &number = numberCache[n];
-            factorize(number);
             if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
                 computeOrders(number);
                 number.nskew = count(number);
