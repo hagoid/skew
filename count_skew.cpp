@@ -29,7 +29,7 @@ DoubleScalar helpSums[N_1] = {};
 Scalar orderSumsCount = 0;
 
 void computePrimes() {
-    for (Scalar i = 2; i < N; ++i) {
+    for (Scalar i = 2; i <= N; ++i) {
         bool isPrime = true;
         for (const auto p: primes) {
             if (i % p == 0) {
@@ -186,7 +186,7 @@ void computeCoprimes(Number &number) {
 //    }
     for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
         if (number.powerOfTwo > 1) {
-            if (e % 2 == 0) {
+            if (e % 2 == 0) {//TOOO: isCoprime, teoreticky even faster cez faktorizaciu oboch? takisto gcd faster?
                 continue;
             }
         }
@@ -290,7 +290,7 @@ Scalar isAB(const Number &number) {
         if (a.n > b.n) {
             break;
         }
-        if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(a.phi, b.n) == 1) {
+        if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(a.phi, b.n) == 1) {//TODO: is coprime
             if (a.nskew == 0) {
                 a.nskew = count(a);//TODO:
             }
