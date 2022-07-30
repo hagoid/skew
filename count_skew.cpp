@@ -26,7 +26,6 @@ std::vector<Scalar> primes = {};
 //std::array<Scalar, N_1> helpSums = {};
 //Scalar gcdCache[N_1_2] = {};
 DoubleScalar helpSums[N_1] = {};
-Scalar helpSumsCount = 0;
 Scalar orderSumsCount = 0;
 
 void computePrimes() {
@@ -322,7 +321,7 @@ PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
                              Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
     const auto n = number.n;
     const auto &number_n_d = getNumber(n / possible_d);
-    helpSumsCount = number_n_d.orders[s];
+    auto helpSumsCount = number_n_d.orders[s];
     bool atLeastOne = possible_d != 1;
     if (!atLeastOne) {
         Scalar maxHelpSumsCount = 0;
