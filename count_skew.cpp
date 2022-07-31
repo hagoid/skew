@@ -90,7 +90,7 @@ Scalar powerOfTwo(Scalar n) {
 //std::array<Number, N_1> numberCache = {};
 Number numberCache[N_1] = {};
 
-Number &getNumber(Scalar n) {//TODO: const
+PROFILE Number &getNumber(Scalar n) {//TODO: const
     if (n > N) {
         throw "";
     }
@@ -165,7 +165,7 @@ Scalar getMaxPrime(const Number &number) {
 
 std::set<int> toCountWithMultiples = {};
 
-void computeCoprimes(Number &number) {
+PROFILE void computeCoprimes(Number &number) {
     if (!number.coprimes.empty()) {
         return;
     }
@@ -201,7 +201,7 @@ void computeCoprimes(Number &number) {
     }
 }
 
-void computeOrders(Number &number) {
+PROFILE void computeOrders(Number &number) {
     if (!number.orders.empty()) {
         return;
     }
@@ -219,10 +219,8 @@ void computeOrders(Number &number) {
     number.inverses[1] = 1;
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
     number.powerSums[1] = 1;//TODO: coprimes 1 je 1
-    std::set<Scalar> orders;
     std::vector<Scalar> powers; //TODO: global
     powers.reserve(number.phi);
-    orders.insert(1);
     for (const auto c: number.coprimes) {
         if (number.orders[c] != 0) {
             continue;
@@ -239,7 +237,6 @@ void computeOrders(Number &number) {
             const auto divisor = order / o;
             auto &oNumber = numberCache[o];
             computeCoprimes(oNumber);
-            orders.insert(o);
             Scalar powerSum = 0;
             for (Scalar i = 0; i < order; i += divisor) {
                 powerSum = (powerSum + powers[i]) % n;
@@ -255,12 +252,20 @@ void computeOrders(Number &number) {
             number.inverses[powers[i]] = powers[powers.size() - i];
         }
     }
+}
+
+PROFILE void reorganizeCoprimes(Number &number) {
+    if (!number.order2OrderIndex.empty()) {
+        return;
+    }
+    computeOrders(number);
     number.order2OrderIndex.resize(number.phi + 1, -1);
-    number.orderIndex2CoprimesBegin.reserve(orders.size() + 1);
+    const auto& number_phi = numberCache[number.phi];
+    number.orderIndex2CoprimesBegin.reserve(number_phi.divisors.size() + 1);//TODO: nemusia tam byt vsetky
     number.orderIndex2CoprimesBegin.push_back(0);
     std::vector<Scalar> coprimes; //TODO: global
     coprimes.reserve(number.phi);
-    for (const auto o: orders) {
+    for (const auto o: number_phi.divisors) {
         number.order2OrderIndex[o] = number.orderIndex2CoprimesBegin.size() - 1;
         for (const auto coprime: number.coprimes) {
             if (number.orders[coprime] == o) {//TODO: N^2
@@ -473,7 +478,7 @@ Scalar count(const Number &number) {
                         if (d > number_r.phi) {
                             continue;
                         }
-                        computeOrders(number_r);
+                        reorganizeCoprimes(number_r);
                         const auto order_index = number_r.order2OrderIndex[d];
                         if (order_index == -1) {
                             continue;
@@ -557,8 +562,7 @@ int main() {
 
             auto &number = numberCache[n];
             if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
-                computeOrders(number);
-                number.nskew = count(number);
+                number.nskew = count(number);//TODO: tento assignment je cudny
                 fprint(number, std::cerr);
             }
 
