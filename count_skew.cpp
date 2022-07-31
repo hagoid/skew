@@ -21,11 +21,8 @@ constexpr Scalar N_1 = N + 1;
 std::vector<Scalar> primes = {};
 
 //std::vector<Scalar> gcdCache = std::vector<Scalar>(N_1_2, 0);
-//std::vector<Scalar> helpSums = std::vector<Scalar>(N_1, 0);
 //std::array<Scalar, N_1_2> gcdCache = {};
-//std::array<Scalar, N_1> helpSums = {};
 //Scalar gcdCache[N_1_2] = {};
-DoubleScalar helpSums[N_1] = {};
 Scalar orderSumsCount = 0;
 
 void computePrimes() {
@@ -75,6 +72,7 @@ struct Number {//TODO: Cn
     std::vector<Scalar> divisors;
     std::vector<Scalar> coprimes;
     std::vector<Scalar> inverses;
+    std::vector<Scalar> powerSums;
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
@@ -219,6 +217,8 @@ void computeOrders(Number &number) {
     number.orders[1] = 1;
     number.inverses.resize(n, 0);
     number.inverses[1] = 1;
+    number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
+    number.powerSums[1] = 1;//TODO: coprimes 1 je 1
     std::set<Scalar> orders;
     std::vector<Scalar> powers; //TODO: global
     powers.reserve(number.phi);
@@ -235,17 +235,20 @@ void computeOrders(Number &number) {
         } while (power != 1); //TODO: number.orders[power] == 0
         const Scalar order = powers.size() * number.orders[power];
         const auto &orderNumber = numberCache[order];
-        for (const auto divisor: orderNumber.divisors) {
-            const auto o = order / divisor;
+        for (const auto o: orderNumber.divisors) {
+            const auto divisor = order / o;
             auto &oNumber = numberCache[o];
             computeCoprimes(oNumber);
             orders.insert(o);
+            Scalar powerSum = 0;
+            for (Scalar i = 0; i < order; i += divisor) {
+                powerSum = (powerSum + powers[i]) % n;
+            }
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
-                if (div >= powers.size()) {
-                    continue;//TODO: ordered?
-                }
-                number.orders[powers[div]] = o;
+                const auto e = powers[div];
+                number.orders[e] = o;
+                number.powerSums[e] = powerSum;
             }
         }
         for (std::size_t i = 1; i < powers.size(); ++i) {
@@ -305,67 +308,62 @@ Scalar isAB(const Number &number) {
 
 DoubleScalar pow(QuadScalar x, unsigned int y, DoubleScalar p)
 {
-    if (helpSums[y] == 0) {
-        QuadScalar res = y & 1 ? x : 1;
+    QuadScalar res = 1;     // Initialize result
 
-        x = pow(x, y >> 1, p);
+    x = x % p; // Update x if it is more than or
+    // equal to p
 
+    if (x == 0) return 0; // In case x is divisible by p;
+
+    while (y > 0) {
+        // If y is odd, multiply x with result
+        if (y & 1)
+            res = (res * x) % p;
+
+        // y must be even now
+        y = y >> 1; // y = y/2
         x = (x * x) % p;
-        res = (res * x) % p;
-        helpSums[y] = res.convert_to<DoubleScalar>();
     }
-    return helpSums[y];
+    return res.convert_to<DoubleScalar>();
 }
 
-PROFILE bool computeHelpSums(Scalar s, const Number &number, Scalar possible_d,
-                             Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
+PROFILE bool computeHelpSums(const Number &number, Scalar possible_d, Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
     const auto n = number.n;
-    const auto &number_n_d = getNumber(n / possible_d);
-    auto helpSumsCount = number_n_d.orders[s];
     bool atLeastOne = possible_d != 1;
     if (!atLeastOne) {
-        Scalar maxHelpSumsCount = 0;
         if (n % 2 == 0) {
-            const auto &number_n_p = getNumber(n / 2);
-            maxHelpSumsCount = number_n_p.orders[s];
             atLeastOne = true;
         }
-        for (const auto &p: number.oddFactors) {
-            if (maxHelpSumsCount == helpSumsCount || p > max_d) {
+        for (const auto &p: number.oddFactors) {//TODO: all factors
+            if (p > max_d) {
                 break;
             }
-            const auto &number_n_p = getNumber(n / p);
-            maxHelpSumsCount = std::max(maxHelpSumsCount, number_n_p.orders[s]);
             atLeastOne = true;
-        }
-        helpSumsCount = maxHelpSumsCount;
-    }
-    if (atLeastOne) {
-        helpSums[0] = 1;
-        for (Scalar i = 1; i <= helpSumsCount; ++i) {
-            helpSums[i] = 0;
         }
     }
     return atLeastOne;
 }
 
-PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h, Scalar n) {//TODO: toto treba vobec robit?
+PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
-    orderSumsCount = number_n_h.orders[s % number_n_h.n];
-    const auto h_value = s == 1 ? 1 : ((pow(s, orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) / (s - 1)) % number_n_h.n;
+    const auto n_h = number_n_h.n;
+    const auto s_mod = s % n_h;
+    orderSumsCount = number_n_h.orders[s_mod];
+    const auto h_value = number_n_h.powerSums[s_mod];
     if (h_value == 0) {
         return orderSumsCount;
     } else {
-        return orderSumsCount * (number_n_h.n / gcd(number_n_h.n, h_value));
+        return orderSumsCount * (n_h / gcd(n_h, h_value));
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r, Scalar s, Scalar n) {
+PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r, Scalar s, Scalar n, const Number &number_n_h) {
     Scalar mocnina = 1;
     Scalar vysledok = 0;
+    const auto h_value = number_n_h.powerSums[s % number_n_h.n];
     for (Scalar i = 0; i < d; i++) {
-        const auto increment = s == 1 ? mocnina : ((pow(s, mocnina % orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1 +
-                    ((pow(s, orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) * static_cast<DoubleScalar>(mocnina / orderSumsCount))) / (s - 1)) % n_div_d;//TODO
+        const auto increment = s == 1 ? mocnina : ((pow(s, mocnina % orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) / (s - 1) +
+                    ((h_value * static_cast<DoubleScalar>(mocnina / orderSumsCount)))) % n_div_d;//TODO
         vysledok += increment;
         mocnina = (mocnina * e) % r;
     }
@@ -442,8 +440,7 @@ Scalar count(const Number &number) {
                     continue;
                 }
 
-                if (!computeHelpSums(s, number, possible_d,
-                                     max_d)) {//TODO: strasne vela checkov tu je, ale my uz iterujeme inak, tak asi az tak netreba
+                if (!computeHelpSums(number, possible_d, max_d)) {//TODO: strasne vela checkov tu je, ale my uz iterujeme inak, tak asi az tak netreba
                     continue;
                 }
 
@@ -470,7 +467,7 @@ Scalar count(const Number &number) {
                         }
                         const auto gcd_n_h = small_gcd_n_h * d;
                         const auto &number_n_h = getNumber(n / gcd_n_h);
-                        const auto r = computeHelpSumsOrder(s, number_n_h, n);
+                        const auto r = computeHelpSumsOrder(s, number_n_h);
                         auto &number_r = numberCache[r];
                         if (d > number_r.phi) {
                             continue;
@@ -487,7 +484,7 @@ Scalar count(const Number &number) {
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
-                            const auto big_vysledok = scitaj(d, e, n_div_d, r, s, n) * static_cast<DoubleScalar>(small_gcd_n_h);
+                            const auto big_vysledok = scitaj(d, e, n_div_d, r, s, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
                             nskew += countCoprimeSolutions(big_vysledok, s, n_div_d, number_n_h);
                         }
                     }
