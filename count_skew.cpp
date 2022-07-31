@@ -318,19 +318,6 @@ DoubleScalar pow(QuadScalar x, unsigned int y, DoubleScalar p)
     return res.convert_to<DoubleScalar>();
 }
 
-PROFILE bool computeHelpSums(const Number &number, Scalar possible_d, Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
-    bool atLeastOne = possible_d != 1;
-    if (!atLeastOne) {
-        for (const auto &p: number.primes) {
-            if (p > max_d) {
-                break;
-            }
-            atLeastOne = true;
-        }
-    }
-    return atLeastOne;
-}
-
 PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
     const auto n_h = number_n_h.n;
@@ -383,8 +370,6 @@ PROFILE bool divisible3(Scalar a, Scalar b) {
     return a % b != 0;
 }
 
-std::vector<Scalar> possible_ds = {};
-
 PROFILE Scalar countForE(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, const Number &number_n_h) {
     Scalar nskew = 0;
     for (const auto small_small_h: number_n_h.coprimes) {
@@ -407,45 +392,16 @@ Scalar count(const Number &number) {
             nskew = a_b;
         } else {
             const auto maxPrime = getMaxPrime(number);
-            for (Scalar s = 1; s < (n + 1) / 2; ++s) {
-                const auto gcd_n_s = gcd(n, s);
-
-                auto possible_d = gcd_n_s;
-
-                if (possible_d % maxPrime == 0) {
+            const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
+            for (const auto d: number_n_div_maxPrime.divisors) {
+                if (d == 1 || d == n) {
                     continue;
                 }
-
-                if (possible_d % 2 == 0) {
-                    possible_d *= powerOfTwo(n) / powerOfTwo(possible_d);
-                }
-
-                const auto max_d = static_cast<Scalar>(std::ceil(static_cast<float>(n) / static_cast<float>(s))) - 1;
-                if (possible_d > max_d) {
-                    continue;
-                }
-
-                if (!computeHelpSums(number, possible_d, max_d)) {//TODO: toto je blbost, preorganizuj a zbav sa tohto
-                    continue;
-                }
-
-                const auto &number_n_div_possible_d = numberCache[n / maxPrime / possible_d];
-                possible_ds.clear();
-                for (const auto small_d: number_n_div_possible_d.divisors) {
-                    const auto d = small_d * possible_d;
-                    if (d == 1) {
-                        continue;
-                    }
-                    if (d > max_d) {
-                        break;
-                    }
-                    possible_ds.push_back(d);
-                }
-                for (const auto d: possible_ds) {
-                    const auto n_div_d = n / d;
-//                    const Scalar rH = order(n_div_d, s);//TODO:
-                    const auto &number_n_div_d = getNumber(n_div_d);
-                    const Scalar rH = number_n_div_d.orders[s];
+                const auto n_div_d = n / d;
+                auto &number_n_div_d = numberCache[n_div_d];
+                reorganizeCoprimes(number_n_div_d);//TODO: rename
+                for (const auto s: number_n_div_d.coprimes) {
+                    const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
                     bool bComputed = false;
                     Scalar b;
                     Scalar gcd_b;
@@ -465,7 +421,7 @@ Scalar count(const Number &number) {
                         if (order_index == -1) {
                             continue;
                         }
-                        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];
+                        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
                         const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
                         for (std::size_t i = begin; i < end; ++i) {
                             const auto e = number_r.coprimes[i];
@@ -521,7 +477,6 @@ void clear(Number &number) {
 
 int main() {
     computePrimes();
-    possible_ds.reserve(N);
     for (Scalar i = 0; i <= N; ++i) {
         auto &number = numberCache[i];
         number.n = i;
