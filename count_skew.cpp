@@ -383,7 +383,7 @@ PROFILE Scalar countCoprimeSolutions(DoubleScalar big_vysledok, Scalar s, Scalar
     if (gcd_b % gcd_a != 0) {
         return 0;
     }
-    const auto number = getNumber(n_div_d / gcd_a);
+    const auto& number = getNumber(n_div_d / gcd_a);//TODO:
     const auto x = b == 0 ? 0 : (number.inverses[a / gcd_a] * b / gcd_a) % number.n;
     Scalar nskew = 0;
     for (Scalar sol = x; sol < number_n_h.n; sol += number.n) {
