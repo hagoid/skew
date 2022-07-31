@@ -65,7 +65,7 @@ Scalar gcd(Scalar n, Scalar k) {
 
 
 struct Number {//TODO: Cn
-    std::vector<Scalar> oddFactors;//TODO: gcd ratat z faktorizacie
+    std::vector<Scalar> primes;//TODO: gcd ratat z faktorizacie
     std::vector<Scalar> orders;// TODO: s v deliteli n
     std::vector<Scalar> order2OrderIndex;
     std::vector<Scalar> orderIndex2CoprimesBegin;
@@ -112,15 +112,14 @@ void factorize(Number& number) {
         divisorsCount++;
     }
     if (n != 0) {
-        n /= number.powerOfTwo;
         for (const auto p: primes) {
             Scalar power = 1;
             if (n % p == 0) {
-                number.oddFactors.push_back(p);
+                number.primes.push_back(p);
                 n /= p;
                 ++power;
             }
-            while (n % p == 0) {
+            while (n % p == 0 && p != 2) {
                 number.squareFree = false;
                 n /= p;
                 ++power;
@@ -145,22 +144,16 @@ void computePhi(Number &number) {
     }
     factorize(number);
     number.phi = number.n;
-    if (number.powerOfTwo > 1) {
-        number.phi -= number.phi / 2;
-    }
-    for (const auto p: number.oddFactors) {
+    for (const auto p: number.primes) {
         number.phi -= number.phi / p;
     }
 }
 
 Scalar getMaxPrime(const Number &number) {
-    if (number.oddFactors.empty()) {
-        if (number.powerOfTwo == 1) {
-            return 1;
-        }
-        return 2;
+    if (number.primes.empty()) {
+        return 1;
     }
-    return number.oddFactors.back();
+    return number.primes.back();
 }
 
 std::set<int> toCountWithMultiples = {};
@@ -183,13 +176,8 @@ PROFILE void computeCoprimes(Number &number) {
 //        printf("toCountWithMultiples %d %d\n", number.n, number.toCountWithMultiples);
 //    }
     for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
-        if (number.powerOfTwo > 1) {
-            if (e % 2 == 0) {//TOOO: isCoprime, teoreticky even faster cez faktorizaciu oboch? takisto gcd faster?
-                continue;
-            }
-        }
         bool coprime = true;
-        for (const auto p : number.oddFactors) {
+        for (const auto p : number.primes) {//TOOO: isCoprime, teoreticky even faster cez faktorizaciu oboch? takisto gcd faster?
             if (e % p == 0) {
                 coprime = false;
                 break;
@@ -278,10 +266,8 @@ PROFILE void reorganizeCoprimes(Number &number) {
 }
 
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
-    if (number.powerOfTwo == 1 && number.oddFactors.size() == 2) {
-        return (number.oddFactors[0] - 1) * (number.oddFactors[1] - 1);
-    } else if (number.powerOfTwo == 2 && number.oddFactors.size() == 1) {
-        return number.oddFactors[0] - 1;
+    if (number.squareFree && number.powerOfTwo <= 2 && number.primes.size() == 2) {
+        return (number.primes[0] - 1) * (number.primes[1] - 1);
     }
     return 0;
 }
@@ -333,13 +319,9 @@ DoubleScalar pow(QuadScalar x, unsigned int y, DoubleScalar p)
 }
 
 PROFILE bool computeHelpSums(const Number &number, Scalar possible_d, Scalar max_d) {//TODO: niektore s nepotrebujeme predratat, napr 1
-    const auto n = number.n;
     bool atLeastOne = possible_d != 1;
     if (!atLeastOne) {
-        if (n % 2 == 0) {
-            atLeastOne = true;
-        }
-        for (const auto &p: number.oddFactors) {//TODO: all factors
+        for (const auto &p: number.primes) {
             if (p > max_d) {
                 break;
             }
@@ -443,7 +425,7 @@ Scalar count(const Number &number) {
                     continue;
                 }
 
-                if (!computeHelpSums(number, possible_d, max_d)) {//TODO: strasne vela checkov tu je, ale my uz iterujeme inak, tak asi az tak netreba
+                if (!computeHelpSums(number, possible_d, max_d)) {//TODO: toto je blbost, preorganizuj a zbav sa tohto
                     continue;
                 }
 
