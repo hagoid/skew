@@ -374,12 +374,10 @@ PROFILE bool overScitane(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, Sc
     return ((s - 1) - big_vysledok * small_small_h) % n_div_d == 0;//TODO: gcd(s-1, n_div_d)
 }
 
-PROFILE Scalar countCoprimeSolutions(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, const Number &number_n_h) {
+PROFILE Scalar countCoprimeSolutions(DoubleScalar big_vysledok, Scalar n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
     const auto a = big_vysledok % n_div_d; // TODO: reuse
-    const auto b = (s - 1) % n_div_d;
     // ax = b (%n_div_d)
     const auto gcd_a = gcd(n_div_d, a);
-    const auto gcd_b = gcd(n_div_d, b); //TODO: reuse
     if (gcd_b % gcd_a != 0) {
         return 0;
     }
@@ -461,6 +459,9 @@ Scalar count(const Number &number) {
 //                    const Scalar rH = order(n_div_d, s);//TODO:
                     const auto &number_n_div_d = getNumber(n_div_d);
                     const Scalar rH = number_n_div_d.orders[s];
+                    bool bComputed = false;
+                    Scalar b;
+                    Scalar gcd_b;
                     for (const auto small_gcd_n_h : number_n_div_d.divisors) {
                         if (small_gcd_n_h == number_n_div_d.n) {
                             break;
@@ -484,8 +485,13 @@ Scalar count(const Number &number) {
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
+                            if (!bComputed) {
+                                b = (s - 1) % n_div_d;
+                                gcd_b = gcd(n_div_d, b);
+                                bComputed = true;
+                            }
                             const auto big_vysledok = scitaj(d, e, n_div_d, r, s, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
-                            nskew += countCoprimeSolutions(big_vysledok, s, n_div_d, number_n_h);
+                            nskew += countCoprimeSolutions(big_vysledok, n_div_d, number_n_h, b, gcd_b);
                         }
                     }
                 }
