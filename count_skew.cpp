@@ -409,9 +409,11 @@ Scalar count(const Number &number) {
                         if (small_gcd_n_h == number_n_div_d.n) {
                             break;
                         }
-                        const auto gcd_n_h = small_gcd_n_h * d;
-                        const auto &number_n_h = getNumber(n / gcd_n_h);
+                        const auto &number_n_h = getNumber(n_div_d / small_gcd_n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
+                        if (r < 2 * rH) {
+                            continue;
+                        }
                         auto &number_r = numberCache[r];
                         if (d > number_r.phi) {
                             continue;
@@ -429,7 +431,7 @@ Scalar count(const Number &number) {
                                 continue;
                             }
                             if (!bComputed) {
-                                b = (s - 1) % n_div_d;
+                                b = s - 1;
                                 gcd_b = gcd(n_div_d, b);
                                 bComputed = true;
                             }
