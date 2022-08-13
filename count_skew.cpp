@@ -419,7 +419,7 @@ Scalar count(const Number &number) {
                         }
                         const auto &number_n_h = getNumber(n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
-                        if (r < 2 * rH) {
+                        if (r < d * rH) {
                             continue;
                         }
                         auto &number_r = numberCache[r];
