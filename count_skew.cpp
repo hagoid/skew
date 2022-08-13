@@ -301,27 +301,6 @@ Scalar isAB(const Number &number) {
     return 0;
 }
 
-DoubleScalar pow(QuadScalar x, unsigned int y, DoubleScalar p)
-{
-    QuadScalar res = 1;     // Initialize result
-
-    x = x % p; // Update x if it is more than or
-    // equal to p
-
-    if (x == 0) return 0; // In case x is divisible by p;
-
-    while (y > 0) {
-        // If y is odd, multiply x with result
-        if (y & 1)
-            res = (res * x) % p;
-
-        // y must be even now
-        y = y >> 1; // y = y/2
-        x = (x * x) % p;
-    }
-    return res.convert_to<DoubleScalar>();
-}
-
 PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
 //    orderSumsCount = order(n / gcd_n_h, s);//TODO
     const auto n_h = number_n_h.n;
@@ -335,17 +314,8 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar r, Scalar s, Scalar n, const Number &number_n_h) {
-    Scalar mocnina = 1;
-    Scalar vysledok = 0;
-    const auto h_value = number_n_h.powerSums[s % number_n_h.n];
-    for (Scalar i = 0; i < d; i++) {
-        const auto increment = s == 1 ? mocnina : ((pow(s, mocnina % orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) / (s - 1) +
-                    ((h_value * static_cast<DoubleScalar>(mocnina / orderSumsCount)))) % number_n_h.n;//TODO
-        vysledok += increment;
-        mocnina = (mocnina * e) % r;
-    }
-    return vysledok;
+PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n, const Number &number_n_h) {
+    return (((number_r.powerSums[e] - d) / rH + n) * static_cast<DoubleScalar>(power_sum) + d) % number_n_h.n;
 }
 
 PROFILE bool overScitane(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, Scalar small_small_h) {
@@ -405,7 +375,8 @@ Scalar count(const Number &number) {
                 auto &number_n_div_d = numberCache[n_div_d];
                 reorganizeCoprimes(number_n_div_d);//TODO: rename
                 for (const auto s: number_n_div_d.coprimes) {
-                    const auto gcd_power_sum = gcd(n_div_d, number_n_div_d.powerSums[s]);//TODO: gcd s powersumom vyuzivame
+                    const auto power_sum = number_n_div_d.powerSums[s];
+                    const auto gcd_power_sum = gcd(n_div_d, power_sum);//TODO: gcd s powersumom vyuzivame
                     const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
                     bool bComputed = false;
                     Scalar b = s - 1;
@@ -443,7 +414,7 @@ Scalar count(const Number &number) {
                                 gcd_b = gcd(n_div_d, b);//TODO: number
                                 bComputed = true;
                             }
-                            const auto big_vysledok = scitaj(d, e, r, s, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
+                            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
                             nskew += countCoprimeSolutions(big_vysledok, n_div_d, number_n_h, b, gcd_b);
                         }
                     }
