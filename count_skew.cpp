@@ -318,12 +318,7 @@ PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Sca
     return (((number_r.powerSums[e] - d) / rH + n) * static_cast<DoubleScalar>(power_sum) + d) % number_n_h.n;
 }
 
-PROFILE bool overScitane(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, Scalar small_small_h) {
-    return ((s - 1) - big_vysledok * small_small_h) % n_div_d == 0;//TODO: gcd(s-1, n_div_d)
-}
-
-PROFILE Scalar countCoprimeSolutions(DoubleScalar big_vysledok, Scalar n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
-    const auto a = big_vysledok % n_div_d; // TODO: reuse
+PROFILE Scalar countCoprimeSolutions(Scalar a, Scalar n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
     // ax = b (%n_div_d)
     const auto gcd_a = gcd(n_div_d, a);
     if (gcd_b % gcd_a != 0) {
@@ -342,16 +337,6 @@ PROFILE Scalar countCoprimeSolutions(DoubleScalar big_vysledok, Scalar n_div_d, 
 
 PROFILE bool divisible3(Scalar a, Scalar b) {
     return a % b != 0;
-}
-
-PROFILE Scalar countForE(DoubleScalar big_vysledok, Scalar s, Scalar n_div_d, const Number &number_n_h) {
-    Scalar nskew = 0;
-    for (const auto small_small_h: number_n_h.coprimes) {
-        if (overScitane(big_vysledok, s, n_div_d, small_small_h)) {
-            nskew++;//TODO: neda sa toto rychlejsie?
-        }
-    }
-    return nskew;
 }
 
 Scalar count(const Number &number) {
@@ -414,7 +399,7 @@ Scalar count(const Number &number) {
                                 gcd_b = gcd(n_div_d, b);//TODO: number
                                 bComputed = true;
                             }
-                            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
+                            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * small_gcd_n_h;
                             nskew += countCoprimeSolutions(big_vysledok, n_div_d, number_n_h, b, gcd_b);
                         }
                     }
