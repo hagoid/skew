@@ -405,21 +405,25 @@ Scalar count(const Number &number) {
                 auto &number_n_div_d = numberCache[n_div_d];
                 reorganizeCoprimes(number_n_div_d);//TODO: rename
                 for (const auto s: number_n_div_d.coprimes) {
+                    const auto gcd_power_sum = gcd(n_div_d, number_n_div_d.powerSums[s]);//TODO: gcd s powersumom vyuzivame
                     const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
                     bool bComputed = false;
                     Scalar b = s - 1;
                     Scalar gcd_b;
-                    for (const auto small_gcd_n_h : number_n_div_d.divisors) {
-                        if (small_gcd_n_h == number_n_div_d.n) {
-                            break;
+                    for (const auto n_h : number_n_div_d.divisors) {
+                        if (n_h == 1) {
+                            continue;
                         }
-                        const auto &number_n_h = getNumber(n_div_d / small_gcd_n_h);
+                        if (gcd_power_sum % n_h == 0) {
+                            continue;
+                        }
+                        const auto &number_n_h = getNumber(n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
                         if (r < 2 * rH) {
                             continue;
                         }
                         auto &number_r = numberCache[r];
-                        if (d > number_r.phi) {
+                        if (d > number_r.phi) {//TODO: lambda?
                             continue;
                         }
                         reorganizeCoprimes(number_r);
@@ -429,13 +433,14 @@ Scalar count(const Number &number) {
                         }
                         const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
                         const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
+                        const auto small_gcd_n_h = n_div_d / n_h;
                         for (std::size_t i = begin; i < end; ++i) {
                             const auto e = number_r.coprimes[i];
                             if (divisible3(e - 1, rH)) {
                                 continue;
                             }
                             if (!bComputed) {
-                                gcd_b = gcd(n_div_d, b);
+                                gcd_b = gcd(n_div_d, b);//TODO: number
                                 bComputed = true;
                             }
                             const auto big_vysledok = scitaj(d, e, r, s, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
