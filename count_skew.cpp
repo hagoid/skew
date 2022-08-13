@@ -49,6 +49,9 @@ void computePrimes() {
     for (Scalar n = 2; n <= N; ++n) {
         bool isPrime = true;
         for (const auto p: primes) {
+            if (p * p > n) {
+                break;
+            }
             if (n % p == 0) {
                 isPrime = false;
                 break;
@@ -108,6 +111,11 @@ void factorize(Number& number) {
     if (n > 1) {
         for (const auto p: primes) {
             Scalar power = 1;
+            if (p * p > n) {
+                number.primes.push_back(n);
+                n = 1;
+                ++power;
+            }
             if (n % p == 0) {
                 number.primes.push_back(p);
                 n /= p;
