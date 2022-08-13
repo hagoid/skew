@@ -25,17 +25,37 @@ std::vector<Scalar> primes = {};
 //Scalar gcdCache[N_1_2] = {};
 Scalar orderSumsCount = 0;
 
+struct Number {//TODO: Cn
+    std::vector<Scalar> primes;//TODO: gcd ratat z faktorizacie
+    std::vector<Scalar> orders;// TODO: s v deliteli n
+    std::vector<Scalar> order2OrderIndex;
+    std::vector<Scalar> orderIndex2CoprimesBegin;
+    std::vector<Scalar> divisors;
+    std::vector<Scalar> coprimes;
+    std::vector<Scalar> inverses;
+    std::vector<Scalar> powerSums;
+    Scalar n;
+    Scalar powerOfTwo = 0;
+    Scalar phi = 0;
+    Scalar nskew = 0;
+    bool squareFree = true;
+};
+
+//std::vector<Number> numberCache = std::vector<Number>(N_1);
+//std::array<Number, N_1> numberCache = {};
+Number numberCache[N_1] = {};
+
 void computePrimes() {
-    for (Scalar i = 2; i <= N; ++i) {
+    for (Scalar n = 2; n <= N; ++n) {
         bool isPrime = true;
         for (const auto p: primes) {
-            if (i % p == 0) {
+            if (n % p == 0) {
                 isPrime = false;
                 break;
             }
         }
         if (isPrime) {
-            primes.push_back(i);
+            primes.push_back(n);
         }
     }
 }
@@ -63,32 +83,11 @@ Scalar gcd(Scalar n, Scalar k) {
 //    return gcdCache[index];
 }
 
-
-struct Number {//TODO: Cn
-    std::vector<Scalar> primes;//TODO: gcd ratat z faktorizacie
-    std::vector<Scalar> orders;// TODO: s v deliteli n
-    std::vector<Scalar> order2OrderIndex;
-    std::vector<Scalar> orderIndex2CoprimesBegin;
-    std::vector<Scalar> divisors;
-    std::vector<Scalar> coprimes;
-    std::vector<Scalar> inverses;
-    std::vector<Scalar> powerSums;
-    Scalar n;
-    Scalar powerOfTwo = 0;
-    Scalar phi = 0;
-    Scalar nskew = 0;
-    bool squareFree = true;
-};
-
 void computeOrders(Number &number);
 
 Scalar powerOfTwo(Scalar n) {
     return (n & (~(n - 1)));
 }
-
-//std::vector<Number> numberCache = std::vector<Number>(N_1);
-//std::array<Number, N_1> numberCache = {};
-Number numberCache[N_1] = {};
 
 PROFILE Number &getNumber(Scalar n) {//TODO: const
     if (n > N) {
@@ -106,12 +105,7 @@ void factorize(Number& number) {
     auto n = number.n;
     number.powerOfTwo = powerOfTwo(n);
     Scalar divisorsCount = 1;
-    auto powerOfTwo = number.powerOfTwo;
-    while (powerOfTwo >>= 1)
-    {
-        divisorsCount++;
-    }
-    if (n != 0) {
+    if (n > 1) {
         for (const auto p: primes) {
             Scalar power = 1;
             if (n % p == 0) {
@@ -119,8 +113,10 @@ void factorize(Number& number) {
                 n /= p;
                 ++power;
             }
-            while (n % p == 0 && p != 2) {
-                number.squareFree = false;
+            while (n % p == 0) {
+                if (p != 2) {
+                    number.squareFree = false;
+                }
                 n /= p;
                 ++power;
             }
@@ -331,13 +327,13 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar n_div_d, Scalar r, Scalar s, Scalar n, const Number &number_n_h) {
+PROFILE Scalar scitaj(Scalar d, Scalar e, Scalar r, Scalar s, Scalar n, const Number &number_n_h) {
     Scalar mocnina = 1;
     Scalar vysledok = 0;
     const auto h_value = number_n_h.powerSums[s % number_n_h.n];
     for (Scalar i = 0; i < d; i++) {
         const auto increment = s == 1 ? mocnina : ((pow(s, mocnina % orderSumsCount, static_cast<DoubleScalar>(n) * (s - 1)) - 1) / (s - 1) +
-                    ((h_value * static_cast<DoubleScalar>(mocnina / orderSumsCount)))) % n_div_d;//TODO
+                    ((h_value * static_cast<DoubleScalar>(mocnina / orderSumsCount)))) % number_n_h.n;//TODO
         vysledok += increment;
         mocnina = (mocnina * e) % r;
     }
@@ -403,7 +399,7 @@ Scalar count(const Number &number) {
                 for (const auto s: number_n_div_d.coprimes) {
                     const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
                     bool bComputed = false;
-                    Scalar b;
+                    Scalar b = s - 1;
                     Scalar gcd_b;
                     for (const auto small_gcd_n_h : number_n_div_d.divisors) {
                         if (small_gcd_n_h == number_n_div_d.n) {
@@ -431,11 +427,10 @@ Scalar count(const Number &number) {
                                 continue;
                             }
                             if (!bComputed) {
-                                b = s - 1;
                                 gcd_b = gcd(n_div_d, b);
                                 bComputed = true;
                             }
-                            const auto big_vysledok = scitaj(d, e, n_div_d, r, s, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
+                            const auto big_vysledok = scitaj(d, e, r, s, n, number_n_h) * static_cast<DoubleScalar>(small_gcd_n_h);
                             nskew += countCoprimeSolutions(big_vysledok, n_div_d, number_n_h, b, gcd_b);
                         }
                     }
