@@ -126,19 +126,8 @@ Scalar gcd(Scalar n, Scalar k) {
 //    return gcdCache[index];
 }
 
-void computeOrders(Number &number);
-
 Scalar powerOfTwo(Scalar n) {
     return (n & (~(n - 1)));
-}
-
-PROFILE Number &getNumber(Scalar n) {//TODO: const
-    if (n > N) {
-        throw "";
-    }
-    auto &number = numberCache[n];
-    computeOrders(number);
-    return number;
 }
 
 PROFILE void factorize(Number& number) {
@@ -364,7 +353,8 @@ PROFILE Scalar countCoprimeSolutions(Scalar a, Scalar n_div_d, const Number &num
     if (gcd_b % gcd_a != 0) {
         return 0;
     }
-    const auto& number = getNumber(n_div_d / gcd_a);//TODO:
+    auto &number = numberCache[n_div_d / gcd_a];
+    computeOrders(number);//TODO:
     const auto x = b == 0 ? 0 : (number.inverses[a / gcd_a] * b / gcd_a) % number.n;
     Scalar nskew = 0;
     for (Scalar sol = x; sol < number_n_h.n; sol += number.n) {
@@ -413,7 +403,8 @@ Scalar count(const Number &number) {
                         if (gcd_power_sum % n_h == 0) {
                             continue;
                         }
-                        const auto &number_n_h = getNumber(n_h);
+                        auto &number_n_h = numberCache[n_h];
+                        computeOrders(number_n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
                         if (r < d * rH) {
                             continue;
