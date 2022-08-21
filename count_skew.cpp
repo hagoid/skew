@@ -65,6 +65,46 @@ void computePrimes() {
 
 
 PROFILE Scalar gcdCompute(Scalar n, Scalar k) {
+    if (n < N_1) {
+        const auto &number = numberCache[n];
+        if (number.squareFree && k < N_1) {
+            if (k == 0) {
+                return n;
+            }
+            const auto &kumber = numberCache[k];
+            std::size_t ni = 0;
+            std::size_t ki = 0;
+            const auto &nrimes = number.primes;
+            const auto &krimes = kumber.primes;
+            const auto nize = nrimes.size();
+            const auto kize = krimes.size();
+            Scalar result = std::min(number.powerOfTwo, kumber.powerOfTwo);
+            if (result > 1) {
+                ++ni;
+                ++ki;
+            }
+            while (ni < nize && ki < kize) {
+                if (nrimes[ni] < krimes[ki]) {
+                    ++ni;
+                } else if (nrimes[ni] > krimes[ki]) {
+                    ++ki;
+                } else {
+                    result *= nrimes[ni];
+                    ++ki;
+                    ++ni;
+                }
+            }
+            return result;
+        }
+        const auto &divisors = number.divisors;
+        const auto size = divisors.size();
+        for (std::size_t i = 0; i < size; ++i) {
+            const auto divisor = divisors[size - i - 1];
+            if (k % divisor == 0) {
+                return divisor;
+            }
+        }
+    }
     while (k != 0) {
         const Scalar new_k = n % k;
         n = k;
@@ -101,7 +141,7 @@ PROFILE Number &getNumber(Scalar n) {//TODO: const
     return number;
 }
 
-void factorize(Number& number) {
+PROFILE void factorize(Number& number) {
     if (number.powerOfTwo != 0) {
         return;
     }
