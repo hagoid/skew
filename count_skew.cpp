@@ -37,6 +37,7 @@ struct Number {//TODO: Cn
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
+    Scalar lambda = 0;
     Scalar nskew = 0;
     bool squareFree = true;
 };
@@ -171,7 +172,7 @@ PROFILE void factorize(Number& number) {
     }
 }
 
-void computePhi(Number &number) {
+PROFILE void computePhi(Number &number) {
     if (number.phi != 0) {
         return;
     }
@@ -179,6 +180,25 @@ void computePhi(Number &number) {
     number.phi = number.n;
     for (const auto p: number.primes) {
         number.phi -= number.phi / p;
+    }
+    if (number.primes.size() <= 1) {
+        if (number.powerOfTwo > 4) {
+            number.lambda = number.phi / 2;//TODO: >> 2??
+        } else {
+            number.lambda = number.phi;
+        }
+    } else {//TODO: optimize
+        const auto p = number.primes.back();
+        auto n_p = number.n / p;
+        auto p_k = p;
+        while (n_p % p == 0) {
+            n_p /= p;
+            p_k *= p;
+        }
+        auto &number_n_p = numberCache[n_p];
+        computePhi(number_n_p);
+        const auto phi_p_k = p_k - p_k / p;
+        number.lambda = number_n_p.lambda * phi_p_k / gcd(number_n_p.lambda, phi_p_k);
     }
 }
 
@@ -241,7 +261,7 @@ PROFILE void computeOrders(Number &number) {
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
     number.powerSums[1] = 1;//TODO: coprimes 1 je 1
     std::vector<Scalar> powers; //TODO: global
-    powers.reserve(number.phi);
+    powers.reserve(number.lambda);
     for (const auto c: number.coprimes) {
         if (number.orders[c] != 0) {
             continue;
@@ -280,13 +300,13 @@ PROFILE void reorganizeCoprimes(Number &number) {
         return;
     }
     computeOrders(number);
-    number.order2OrderIndex.resize(number.phi + 1, -1);
-    const auto& number_phi = numberCache[number.phi];
-    number.orderIndex2CoprimesBegin.reserve(number_phi.divisors.size() + 1);//TODO: nemusia tam byt vsetky
+    number.order2OrderIndex.resize(number.lambda + 1, -1);
+    const auto& number_lambda = numberCache[number.lambda];
+    number.orderIndex2CoprimesBegin.reserve(number_lambda.divisors.size() + 1);//TODO: nemusia tam byt vsetky
     number.orderIndex2CoprimesBegin.push_back(0);
     std::vector<Scalar> coprimes; //TODO: global
     coprimes.reserve(number.phi);
-    for (const auto o: number_phi.divisors) {
+    for (const auto o: number_lambda.divisors) {
         number.order2OrderIndex[o] = number.orderIndex2CoprimesBegin.size() - 1;
         for (const auto coprime: number.coprimes) {
             if (number.orders[coprime] == o) {//TODO: N^2
@@ -406,11 +426,11 @@ Scalar count(const Number &number) {
                         auto &number_n_h = numberCache[n_h];
                         computeOrders(number_n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
-                        if (r < d * rH) {
+                        if (r < d * rH) {//TODO: toto nie je blbost?
                             continue;
                         }
-                        auto &number_r = numberCache[r];
-                        if (d > number_r.phi) {//TODO: lambda?
+                        auto &number_r = numberCache[r];//TODO: nemoze byt vacsie ako N?
+                        if (d > number_r.lambda) {
                             continue;
                         }
                         reorganizeCoprimes(number_r);
@@ -423,7 +443,7 @@ Scalar count(const Number &number) {
                         const auto small_gcd_n_h = n_div_d / n_h;
                         for (std::size_t i = begin; i < end; ++i) {
                             const auto e = number_r.coprimes[i];
-                            if (divisible3(e - 1, rH)) {
+                            if (divisible3(e - 1, rH)) {//TODO: e % rH == 1
                                 continue;
                             }
                             if (!bComputed) {
