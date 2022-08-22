@@ -1,37 +1,29 @@
-#include <iostream>
-#include <cstdio>
-#include <array>
-#include <vector>
 #include <cmath>
-#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <ostream>
 #include <set>
-#include <boost/multiprecision/cpp_int.hpp>
+#include <vector>
 
 //#define PROFILE __attribute__((noinline))
 #define PROFILE
 
 using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;
-using QuadScalar = boost::multiprecision::int128_t;
 
-constexpr Scalar N = 100000;
+constexpr Scalar N = 100000;//TODO: argument
 constexpr Scalar N_1 = N + 1;
-//constexpr Scalar N_1_2 = N_1 * N_1;
 
-std::vector<Scalar> primes = {};
+std::vector<Scalar> primes = {};//TODO:
 
-//std::vector<Scalar> gcdCache = std::vector<Scalar>(N_1_2, 0);
-//std::array<Scalar, N_1_2> gcdCache = {};
-//Scalar gcdCache[N_1_2] = {};
-Scalar orderSumsCount = 0;
 
 struct Number {//TODO: Cn
-    std::vector<Scalar> primes;//TODO: gcd ratat z faktorizacie
+    std::vector<Scalar> primes;
     std::vector<Scalar> orders;// TODO: s v deliteli n
     std::vector<Scalar> order2OrderIndex;
     std::vector<Scalar> orderIndex2CoprimesBegin;
     std::vector<Scalar> divisors;
-    std::vector<Scalar> coprimes;
+    std::vector<Scalar> coprimes;//TODO: vector vectorov
     std::vector<Scalar> inverses;
     std::vector<Scalar> powerSums;
     std::vector<Scalar> gcdPowerSums;
@@ -43,9 +35,7 @@ struct Number {//TODO: Cn
     bool squareFree = true;
 };
 
-//std::vector<Number> numberCache = std::vector<Number>(N_1);
-//std::array<Number, N_1> numberCache = {};
-Number numberCache[N_1] = {};
+Number numberCache[N_1] = {};//TODO: vector, non static?
 
 void computePrimes() {
     for (Scalar n = 2; n <= N; ++n) {
@@ -66,7 +56,7 @@ void computePrimes() {
 }
 
 
-PROFILE Scalar gcdCompute(Scalar n, Scalar k) {
+PROFILE Scalar gcd(Scalar n, Scalar k) {
     if (n < N_1) {//TODO: optimize, upratat, fallbacky
         const auto &number = numberCache[n];
         if (number.squareFree && k < N_1) {
@@ -113,19 +103,6 @@ PROFILE Scalar gcdCompute(Scalar n, Scalar k) {
         k = new_k;
     }
     return n;
-}
-
-Scalar gcd(Scalar n, Scalar k) {
-    return gcdCompute(n, k);
-//    const auto index = n * N_1 + k;
-//    if (gcdCache[index] == 0) {
-//        if (k == 0) {
-//            gcdCache[index] = n;
-//        } else {
-//            gcdCache[index] = gcd(k, n % k);
-//        }
-//    }
-//    return gcdCache[index];
 }
 
 Scalar powerOfTwo(Scalar n) {
@@ -210,7 +187,7 @@ Scalar getMaxPrime(const Number &number) {
     return number.primes.back();
 }
 
-std::set<int> toCountWithMultiples = {};
+std::set<int> toCountWithMultiples = {};//TODO
 
 PROFILE void computeCoprimes(Number &number) {
     if (!number.coprimes.empty()) {
@@ -226,9 +203,6 @@ PROFILE void computeCoprimes(Number &number) {
         return;
     }
     toCountWithMultiples.insert(number.n);
-//    if (++number.toCountWithMultiples > 1) {
-//        printf("toCountWithMultiples %d %d\n", number.n, number.toCountWithMultiples);
-//    }
     for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
         bool coprime = true;
         for (const auto p : number.primes) {//TOOO: isCoprime, teoreticky even faster cez faktorizaciu oboch? takisto gcd faster?
@@ -357,10 +331,9 @@ Scalar isAB(const Number &number) {
 }
 
 PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
-//    orderSumsCount = order(n / gcd_n_h, s);//TODO
     const auto n_h = number_n_h.n;
     const auto s_mod = s % n_h;
-    orderSumsCount = number_n_h.orders[s_mod];
+    const auto orderSumsCount = number_n_h.orders[s_mod];
     const auto h_value = number_n_h.gcdPowerSums[s_mod];
     if (h_value == n_h) {//TODO:
         return orderSumsCount;
@@ -523,7 +496,7 @@ int main() {
             auto &number = numberCache[n];
             if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
                 number.nskew = count(number);//TODO: tento assignment je cudny
-                fprint(number, std::cerr);
+//                fprint(number, std::cerr);
             }
 
             clear(number);
