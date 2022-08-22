@@ -305,7 +305,7 @@ Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
     return 0;
 }
 
-Scalar count(const Number &number);
+void countSkewmorphisms(Number &number);
 
 Scalar isAB(const Number &number) {
     for (const auto divisor: number.divisors) {
@@ -318,12 +318,8 @@ Scalar isAB(const Number &number) {
             break;
         }
         if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(b.n, a.phi) == 1) {//TODO: is coprime
-            if (a.nskew == 0) {
-                a.nskew = count(a);//TODO:
-            }
-            if (b.nskew == 0) {
-                b.nskew = count(b);
-            }
+            countSkewmorphisms(a);
+            countSkewmorphisms(b);
             return a.nskew * b.nskew;
         }
     }
@@ -368,7 +364,10 @@ PROFILE bool divisible3(Scalar a, Scalar b) {
     return a % b != 0;
 }
 
-Scalar count(const Number &number) {
+PROFILE void countSkewmorphisms(Number &number) {
+    if (number.nskew != 0) {
+        return;
+    }
     const auto n = number.n;
     const auto phi = number.phi;
     auto nskew = phi;
@@ -437,7 +436,7 @@ Scalar count(const Number &number) {
             }
         }
     }
-    return nskew;
+    number.nskew = nskew;
 }
 
 void print(const Number &number) {
@@ -494,8 +493,8 @@ int main() {
             const auto n = multiplier * p;
 
             auto &number = numberCache[n];
-            if (number.powerOfTwo <= 16 && number.squareFree && number.nskew == 0) {
-                number.nskew = count(number);//TODO: tento assignment je cudny
+            if (number.powerOfTwo <= 16 && number.squareFree) {
+                countSkewmorphisms(number);
 //                fprint(number, std::cerr);
             }
 
