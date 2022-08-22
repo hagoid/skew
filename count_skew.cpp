@@ -34,6 +34,7 @@ struct Number {//TODO: Cn
     std::vector<Scalar> coprimes;
     std::vector<Scalar> inverses;
     std::vector<Scalar> powerSums;
+    std::vector<Scalar> gcdPowerSums;
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
@@ -66,7 +67,7 @@ void computePrimes() {
 
 
 PROFILE Scalar gcdCompute(Scalar n, Scalar k) {
-    if (n < N_1) {
+    if (n < N_1) {//TODO: optimize, upratat, fallbacky
         const auto &number = numberCache[n];
         if (number.squareFree && k < N_1) {
             if (k == 0) {
@@ -260,6 +261,8 @@ PROFILE void computeOrders(Number &number) {
     number.inverses[1] = 1;
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
     number.powerSums[1] = 1;//TODO: coprimes 1 je 1
+    number.gcdPowerSums.resize(n, 0);
+    number.gcdPowerSums[1] = 1;
     std::vector<Scalar> powers; //TODO: global
     powers.reserve(number.lambda);
     for (const auto c: number.coprimes) {
@@ -272,7 +275,7 @@ PROFILE void computeOrders(Number &number) {
             powers.push_back(power);
             power = (power * c) % n;//TODO: pre vsetky delitele potom zratat, a inverse je phi - 1
         } while (power != 1); //TODO: number.orders[power] == 0
-        const Scalar order = powers.size() * number.orders[power];
+        const Scalar order = powers.size() * number.orders[power];//TODO: power == 1
         const auto &orderNumber = numberCache[order];
         for (const auto o: orderNumber.divisors) {
             const auto divisor = order / o;
@@ -283,11 +286,13 @@ PROFILE void computeOrders(Number &number) {
                 powerSum = powerSum + powers[i];//TODO: reuse powerSum suborbity
             }
             powerSum = powerSum % n;
+            const auto gcdPowerSum = gcd(number.n, powerSum);
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
                 const auto e = powers[div];
                 number.orders[e] = o;
                 number.powerSums[e] = powerSum;
+                number.gcdPowerSums[e] = gcdPowerSum;
             }
         }
         for (std::size_t i = 1; i < powers.size(); ++i) {
@@ -338,7 +343,7 @@ Scalar isAB(const Number &number) {
         if (a.n > b.n) {
             break;
         }
-        if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(a.phi, b.n) == 1) {//TODO: is coprime
+        if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(b.n, a.phi) == 1) {//TODO: is coprime
             if (a.nskew == 0) {
                 a.nskew = count(a);//TODO:
             }
@@ -356,11 +361,11 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
     const auto n_h = number_n_h.n;
     const auto s_mod = s % n_h;
     orderSumsCount = number_n_h.orders[s_mod];
-    const auto h_value = number_n_h.powerSums[s_mod];
-    if (h_value == 0) {
+    const auto h_value = number_n_h.gcdPowerSums[s_mod];
+    if (h_value == n_h) {//TODO:
         return orderSumsCount;
     } else {
-        return orderSumsCount * (n_h / gcd(n_h, h_value));
+        return orderSumsCount * (n_h / h_value);
     }
 }
 
@@ -410,9 +415,9 @@ Scalar count(const Number &number) {
                 const auto n_div_d = n / d;
                 auto &number_n_div_d = numberCache[n_div_d];
                 reorganizeCoprimes(number_n_div_d);//TODO: rename
-                for (const auto s: number_n_div_d.coprimes) {
+                for (const auto s: number_n_div_d.coprimes) {//TODO: s == 1 special?
                     const auto power_sum = number_n_div_d.powerSums[s];
-                    const auto gcd_power_sum = gcd(n_div_d, power_sum);//TODO: gcd s powersumom vyuzivame
+                    const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
                     const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
                     bool bComputed = false;
                     Scalar b = s - 1;
@@ -427,9 +432,9 @@ Scalar count(const Number &number) {
                         auto &number_n_h = numberCache[n_h];
                         computeOrders(number_n_h);
                         const auto r = computeHelpSumsOrder(s, number_n_h);
-                        if (r < d * rH) {//TODO: toto nie je blbost?
-                            continue;
-                        }
+//                        if (r < d * rH) {//TODO: toto nie je blbost?
+//                            continue;
+//                        }
                         auto &number_r = numberCache[r];//TODO: nemoze byt vacsie ako N?
                         if (d > number_r.lambda) {
                             continue;
