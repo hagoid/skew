@@ -278,10 +278,11 @@ PROFILE void computeOrders(Number &number) {
             const auto divisor = order / o;
             auto &oNumber = numberCache[o];
             computeCoprimes(oNumber);
-            Scalar powerSum = 0;
+            DoubleScalar powerSum = 0;
             for (Scalar i = 0; i < order; i += divisor) {
-                powerSum = (powerSum + powers[i]) % n;
+                powerSum = powerSum + powers[i];//TODO: reuse powerSum suborbity
             }
+            powerSum = powerSum % n;
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
                 const auto e = powers[div];
