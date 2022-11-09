@@ -12,9 +12,6 @@
 using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;
 
-constexpr Scalar N = 100000;//TODO: argument
-constexpr Scalar N_1 = N + 1;
-
 std::vector<Scalar> primes = {};//TODO:
 
 
@@ -37,7 +34,7 @@ struct Number {//TODO: Cn
     bool squareFree = true;
 };
 
-Number numberCache[N_1] = {};//TODO: vector, non static?
+std::vector<Number> numberCache = {};//TODO: non static?
 
 Scalar getMaxPrime(const Number &number) {
     if (number.primes.empty()) {
@@ -50,7 +47,7 @@ bool isPowerOfPrime(Number &number) {
     return number.primes.size() == 1;
 }
 
-void computePrimes() {//TODO: rovno s faktorizaciou
+void computePrimes(Scalar N) {//TODO: rovno s faktorizaciou
     for (Scalar n = 2; n <= N; ++n) {
         bool isPrime = true;
         for (const auto p: primes) {
@@ -70,6 +67,7 @@ void computePrimes() {//TODO: rovno s faktorizaciou
 
 
 PROFILE Scalar gcd(Scalar n, Scalar k) {
+    const Scalar N_1 = numberCache.size();
     if (n < N_1) {//TODO: optimize, upratat, fallbacky
         const auto &number = numberCache[n];
         if (number.squareFree && k < N_1) {
@@ -524,15 +522,22 @@ void clear(Number &number) {
     }
 }
 
-int main() {
-    computePrimes();
+int main(int argc, char *argv[]) {
+    Scalar N = 10000;
+    if (argc > 1) {
+        N = std::stoi(argv[1]);
+    }
+    Scalar A = 1;
+    if (argc > 2) {
+        A = std::stoi(argv[2]);
+    }
+    numberCache.resize(N + 1);
+    computePrimes(N);
     for (Scalar i = 0; i <= N; ++i) {
         auto &number = numberCache[i];
         number.n = i;
         computePhi(number);//TODO: lazy ak chceme pouzivat A, B
     }
-    const Scalar A = 1;
-    const Scalar B = N;
 
     toCountWithMultiples.insert(1);
     for (const auto p : primes) {
@@ -542,7 +547,7 @@ int main() {
     while (!toCountWithMultiples.empty()) {
         const auto p = *toCountWithMultiples.rbegin();
         const auto lowerMultiplier = (A + p - 1) / p;
-        const auto upperMultiplier = B / p;
+        const auto upperMultiplier = N / p;
         for (auto multiplier = upperMultiplier; multiplier >= lowerMultiplier; --multiplier) {
             const auto n = multiplier * p;
 
@@ -561,7 +566,7 @@ int main() {
 //        }
         toCountWithMultiples.erase(p);
     }
-    for (auto n = A; n <= B; ++n) {
+    for (auto n = A; n <= N; ++n) {
         const auto &number = numberCache[n];
         if (number.nskew != 0) {
             print(number);
