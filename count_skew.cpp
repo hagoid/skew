@@ -12,9 +12,6 @@
 using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;
 
-std::vector<Scalar> primes = {};//TODO:
-
-
 struct Number {//TODO: Cn
     std::vector<Scalar> primes;
     std::vector<Scalar> powersOfPrimes;
@@ -46,25 +43,6 @@ Scalar getMaxPrime(const Number &number) {
 bool isPowerOfPrime(Number &number) {
     return number.primes.size() == 1;
 }
-
-void computePrimes(Scalar N) {//TODO: rovno s faktorizaciou
-    for (Scalar n = 2; n <= N; ++n) {
-        bool isPrime = true;
-        for (const auto p: primes) {
-            if (p * p > n) {
-                break;
-            }
-            if (n % p == 0) {
-                isPrime = false;
-                break;
-            }
-        }
-        if (isPrime) {
-            primes.push_back(n);
-        }
-    }
-}
-
 
 PROFILE Scalar gcd(Scalar n, Scalar k) {
     const Scalar N_1 = numberCache.size();
@@ -120,7 +98,7 @@ Scalar powerOfTwo(Scalar n) {
     return (n & (~(n - 1)));
 }
 
-PROFILE void factorize(Number& number) {
+PROFILE void factorize(Number& number, const std::vector<Scalar> &primes) {
     if (number.powerOfTwo != 0) {
         return;
     }
@@ -128,33 +106,33 @@ PROFILE void factorize(Number& number) {
     number.powerOfTwo = powerOfTwo(n);
     Scalar divisorsCount = 1;
     Scalar powerOfPrime = 1;
-    Scalar prime = 1;
+    Scalar prime = n;
     if (n > 1) {
         for (const auto p: primes) {
             if (p * p > n) {
-                prime = n;
-                powerOfPrime = n;
-                n = 1;
-                ++divisorsCount;
                 break;
-            } else {
-                if (n % p == 0) {
-                    prime = p;
-                    powerOfPrime = p;
-                    n /= p;//TODO: optimize divisions?
-                    ++divisorsCount;
-
-                    while (n % p == 0) {
-                        if (p != 2) {
-                            number.squareFree = false;
-                        }
-                        powerOfPrime *= p;
-                        n /= p;
-                        ++divisorsCount;
-                    }
-                    break;
-                }
             }
+            if (n % p == 0) {
+                prime = p;
+                powerOfPrime = p;
+                n /= p;//TODO: optimize divisions?
+                ++divisorsCount;
+
+                while (n % p == 0) {
+                    if (p != 2) {
+                        number.squareFree = false;
+                    }
+                    powerOfPrime *= p;
+                    n /= p;
+                    ++divisorsCount;
+                }
+                break;
+            }
+        }
+        if (n == prime) {
+            powerOfPrime = n;
+            n = 1;
+            ++divisorsCount;
         }
         const auto &number_n_p = numberCache[n];
         const auto primesCount = number_n_p.primes.size() + 1;
@@ -189,8 +167,7 @@ PROFILE void factorize(Number& number) {
 PROFILE void computePhi(Number &number) {
     if (number.phi != 0) {
         return;
-    }
-    factorize(number);
+    }//TODO: factorize
     number.phi = number.n;
     for (const auto p: number.primes) {
         number.phi -= number.phi / p;
@@ -209,14 +186,32 @@ PROFILE void computePhi(Number &number) {
             n_p /= p;
             p_k *= p;
         }
-        auto &number_n_p = numberCache[n_p];
-        computePhi(number_n_p);
+        auto &number_n_p = numberCache[n_p];//TODO: computePhi
         const auto phi_p_k = p_k - p_k / p;
         number.lambda = number_n_p.lambda * phi_p_k / gcd(number_n_p.lambda, phi_p_k);
     }
 }
 
 std::set<int> toCountWithMultiples = {};//TODO
+
+PROFILE void prepareNumbers(Scalar N) {
+    numberCache.resize(N + 1);
+    std::vector<Scalar> primes;
+    primes.reserve(1.25506 * 2 * std::sqrt(N) / log(N));
+    for (Scalar i = 0; i <= N; ++i) {
+        auto &number = numberCache[i];
+        number.n = i;
+        factorize(number, primes);
+        if (isPowerOfPrime(number) && i == number.primes.back()) {//TODO: isPrime, computePhi to tiez zistuje
+            if (i * DoubleScalar(i) <= N) {
+                primes.push_back(i);
+            }
+            toCountWithMultiples.insert(i);
+        }
+        computePhi(number);//TODO: lazy ak chceme pouzivat A, B
+    }
+    toCountWithMultiples.insert(1);
+}
 
 void computeOrders(Number &number);
 
@@ -533,18 +528,8 @@ int main(int argc, char *argv[]) {
     if (argc > 2) {
         A = std::stoi(argv[2]);
     }
-    numberCache.resize(N + 1);
-    computePrimes(N);
-    for (Scalar i = 0; i <= N; ++i) {
-        auto &number = numberCache[i];
-        number.n = i;
-        computePhi(number);//TODO: lazy ak chceme pouzivat A, B
-    }
 
-    toCountWithMultiples.insert(1);
-    for (const auto p : primes) {
-        toCountWithMultiples.insert(p);
-    }
+    prepareNumbers(N);
 
     while (!toCountWithMultiples.empty()) {
         const auto p = *toCountWithMultiples.rbegin();
