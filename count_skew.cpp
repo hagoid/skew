@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -128,40 +129,62 @@ PROFILE void factorize(Number& number) {
     auto n = number.n;
     number.powerOfTwo = powerOfTwo(n);
     Scalar divisorsCount = 1;
+    Scalar powerOfPrime = 1;
+    Scalar prime = 1;
     if (n > 1) {
         for (const auto p: primes) {
-            Scalar power = 1;
             if (p * p > n) {
-                number.primes.push_back(n);
-                number.powersOfPrimes.push_back(n);
+                prime = n;
+                powerOfPrime = n;
                 n = 1;
-                ++power;
-            }
-            if (n % p == 0) {
-                number.primes.push_back(p);
-                number.powersOfPrimes.push_back(p);
-                n /= p;
-                ++power;
-            }
-            while (n % p == 0) {
-                if (p != 2) {
-                    number.squareFree = false;
-                }
-                number.powersOfPrimes.back() *= p;
-                n /= p;
-                ++power;
-            }
-            divisorsCount *= power;
-            if (n == 1) {
+                ++divisorsCount;
                 break;
+            } else {
+                if (n % p == 0) {
+                    prime = p;
+                    powerOfPrime = p;
+                    n /= p;//TODO: optimize divisions?
+                    ++divisorsCount;
+
+                    while (n % p == 0) {
+                        if (p != 2) {
+                            number.squareFree = false;
+                        }
+                        powerOfPrime *= p;
+                        n /= p;
+                        ++divisorsCount;
+                    }
+                    break;
+                }
             }
         }
-    }
-    number.divisors.reserve(divisorsCount);
-    for (Scalar i = 1; i <= number.n; ++i) {
-        if (number.n % i == 0) {
-            number.divisors.push_back(i);
+        const auto &number_n_p = numberCache[n];
+        const auto primesCount = number_n_p.primes.size() + 1;
+        number.primes.reserve(primesCount);
+        number.powersOfPrimes.reserve(primesCount);
+        number.primes.push_back(prime);
+        number.powersOfPrimes.push_back(powerOfPrime);
+        if (n == 1) {
+            number.divisors.reserve(divisorsCount);
+            for (Scalar power = 1; power <= powerOfPrime; power *= prime) {
+                number.divisors.push_back(power);
+            }
+        } else {
+            const auto &number_p_k = numberCache[powerOfPrime];
+            number.primes.insert(number.primes.end(), number_n_p.primes.begin(), number_n_p.primes.end());
+            number.powersOfPrimes.insert(number.powersOfPrimes.end(), number_n_p.powersOfPrimes.begin(), number_n_p.powersOfPrimes.end());
+            number.squareFree = number.squareFree && number_n_p.squareFree;
+            divisorsCount *= number_n_p.divisors.size();
+            number.divisors.reserve(divisorsCount);
+            for (const auto d: number_p_k.divisors) {
+                for (const auto e: number_n_p.divisors) {
+                    number.divisors.push_back(d * e);
+                }
+            }
+            std::sort(number.divisors.begin(), number.divisors.end());//TODO: potrebujeme?
         }
+    } else {
+        number.divisors = {1};
     }
 }
 
