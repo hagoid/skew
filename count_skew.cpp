@@ -6,6 +6,7 @@
 #include <set>
 #include <vector>
 
+//TODO: profile prepinac
 //#define PROFILE __attribute__((noinline))
 #define PROFILE
 
@@ -45,53 +46,41 @@ bool isPowerOfPrime(Number &number) {
 }
 
 PROFILE Scalar gcd(Scalar n, Scalar k) {
-    const Scalar N_1 = numberCache.size();
-    if (n < N_1) {//TODO: optimize, upratat, fallbacky
-        const auto &number = numberCache[n];
-        if (number.squareFree && k < N_1) {
-            if (k == 0) {
-                return n;
-            }
-            const auto &kumber = numberCache[k];
-            std::size_t ni = 0;
-            std::size_t ki = 0;
-            const auto &nrimes = number.primes;
-            const auto &krimes = kumber.primes;
-            const auto nize = nrimes.size();
-            const auto kize = krimes.size();
-            Scalar result = std::min(number.powerOfTwo, kumber.powerOfTwo);
-            if (result > 1) {
-                ++ni;
-                ++ki;
-            }
-            while (ni < nize && ki < kize) {
-                if (nrimes[ni] < krimes[ki]) {
-                    ++ni;
-                } else if (nrimes[ni] > krimes[ki]) {
-                    ++ki;
-                } else {
-                    result *= nrimes[ni];
-                    ++ki;
-                    ++ni;
-                }
-            }
-            return result;
-        }
-        const auto &divisors = number.divisors;
-        const auto size = divisors.size();
-        for (std::size_t i = 0; i < size; ++i) {
-            const auto divisor = divisors[size - i - 1];
-            if (k % divisor == 0) {
-                return divisor;
-            }
-        }
-    }
     while (k != 0) {
         const Scalar new_k = n % k;
         n = k;
         k = new_k;
     }
     return n;
+}
+
+PROFILE Scalar gcd(const Number &number_n, const Number &number_k) {
+    if (number_k.n == 0) {
+        return number_n.n;
+    }
+    std::size_t ni = 0;
+    std::size_t ki = 0;
+    const auto &n_primes = number_n.primes;
+    const auto &k_primes = number_k.primes;
+    const auto &n_powersOfPrimes = number_n.powersOfPrimes;
+    const auto &k_powersOfPrimes = number_k.powersOfPrimes;
+    const auto n_size = n_primes.size();
+    const auto k_size = k_primes.size();
+    Scalar result = 1;
+    while (ni < n_size && ki < k_size) {
+        const auto n_prime = n_primes[ni];
+        const auto k_prime = k_primes[ki];
+        if (n_prime < k_prime) {
+            ++ni;
+        } else if (n_prime > k_prime) {
+            ++ki;
+        } else {
+            result *= std::min(n_powersOfPrimes[ni], k_powersOfPrimes[ki]);
+            ++ki;
+            ++ni;
+        }
+    }
+    return result;
 }
 
 Scalar powerOfTwo(Scalar n) {
@@ -188,7 +177,7 @@ PROFILE void computePhi(Number &number) {
         }
         auto &number_n_p = numberCache[n_p];//TODO: computePhi
         const auto phi_p_k = p_k - p_k / p;
-        number.lambda = number_n_p.lambda * phi_p_k / gcd(number_n_p.lambda, phi_p_k);
+        number.lambda = number_n_p.lambda * phi_p_k / gcd(numberCache[number_n_p.lambda], numberCache[phi_p_k]);
     }
 }
 
@@ -307,7 +296,7 @@ PROFILE void computeOrders(Number &number) {
                 powerSum = powerSum + powers[i];//TODO: reuse powerSum suborbity
             }
             powerSum = powerSum % n;
-            const auto gcdPowerSum = gcd(number.n, powerSum);
+            const auto gcdPowerSum = gcd(number, numberCache[powerSum]);
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
                 const auto e = powers[div];
@@ -364,7 +353,7 @@ Scalar isAB(const Number &number) {
         if (a.n > b.n) {
             break;
         }
-        if (gcd(a.n, b.n) == 1 && gcd(a.n, b.phi) == 1 && gcd(b.n, a.phi) == 1) {//TODO: is coprime
+        if (gcd(a, b) == 1 && gcd(a, numberCache[b.phi]) == 1 && gcd(b, numberCache[a.phi]) == 1) {//TODO: is coprime
             countSkewmorphisms(a);
             countSkewmorphisms(b);
             return a.nskew * b.nskew;
@@ -389,13 +378,13 @@ PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Sca
     return (((number_r.powerSums[e] - d) / rH + n) * static_cast<DoubleScalar>(power_sum) + d) % number_n_h.n;
 }
 
-PROFILE Scalar countCoprimeSolutions(Scalar a, Scalar n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
+PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
     // ax = b (%n_div_d)
-    const auto gcd_a = gcd(n_div_d, a);
+    const auto gcd_a = gcd(number_n_div_d, numberCache[a]);
     if (gcd_b % gcd_a != 0) {
         return 0;
     }
-    auto &number = numberCache[n_div_d / gcd_a];
+    auto &number = numberCache[number_n_div_d.n / gcd_a];
     computeOrders(number);//TODO:
     const auto x = b == 0 ? 0 : (number.inverses[a / gcd_a] * b / gcd_a) % number.n;
     Scalar nskew = 0;
@@ -419,7 +408,7 @@ PROFILE void countSkewmorphisms(Number &number) {
     const auto phi = number.phi;
     auto nskew = phi;
 
-    if (gcd(n, phi) > 1) {
+    if (gcd(number, numberCache[phi]) > 1) {
         if (const auto p_1_q_1 = isPQ(number)) {
             nskew += p_1_q_1;
         } else if (const auto a_b = isAB(number)) {
@@ -472,11 +461,11 @@ PROFILE void countSkewmorphisms(Number &number) {
                                 continue;
                             }
                             if (!bComputed) {
-                                gcd_b = gcd(n_div_d, b);//TODO: number
+                                gcd_b = gcd(number_n_div_d, numberCache[b]);
                                 bComputed = true;
                             }
                             const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * small_gcd_n_h;
-                            nskew += countCoprimeSolutions(big_vysledok, n_div_d, number_n_h, b, gcd_b);
+                            nskew += countCoprimeSolutions(big_vysledok, number_n_div_d, number_n_h, b, gcd_b);
                         }
                     }
                 }
