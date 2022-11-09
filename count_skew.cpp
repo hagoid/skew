@@ -518,6 +518,8 @@ void clear(Number &number) {
         number.order2OrderIndex = std::vector<Scalar>{};
         number.orderIndex2CoprimesBegin = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.inverses = std::vector<Scalar>{};
+        number.powerSums = std::vector<Scalar>{};
+        number.gcdPowerSums = std::vector<Scalar>{};
         toCountWithMultiples.erase(number.n);
     }
 }
