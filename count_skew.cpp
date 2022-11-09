@@ -215,7 +215,7 @@ PROFILE void computeCoprimes(Number &number) {
     computePhi(number);
     number.coprimes.reserve(number.phi);
     if (n == 1) {
-//TODO:        number.coprimes.push_back(1);
+        number.coprimes.push_back(0);
         return;
     }
     toCountWithMultiples.insert(number.n);
@@ -263,6 +263,10 @@ PROFILE void computeOrders(Number &number) {
     }
     computeCoprimes(number);
     if (n == 1) {
+        number.orders = {1};
+        number.inverses = {0};
+        number.powerSums = {0};
+        number.gcdPowerSums = {0};
         return;
     }
     number.orders.resize(n, 0);
@@ -270,7 +274,7 @@ PROFILE void computeOrders(Number &number) {
     number.inverses.resize(n, 0);
     number.inverses[1] = 1;
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
-    number.powerSums[1] = 1;//TODO: coprimes 1 je 1
+    number.powerSums[1] = 1;
     number.gcdPowerSums.resize(n, 0);
     number.gcdPowerSums[1] = 1;
     std::vector<Scalar> powers; //TODO: global
