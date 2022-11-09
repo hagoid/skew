@@ -19,6 +19,7 @@ std::vector<Scalar> primes = {};//TODO:
 
 struct Number {//TODO: Cn
     std::vector<Scalar> primes;
+    std::vector<Scalar> powersOfPrimes;
     std::vector<Scalar> orders;// TODO: s v deliteli n
     std::vector<Scalar> order2OrderIndex;
     std::vector<Scalar> orderIndex2CoprimesBegin;
@@ -37,7 +38,18 @@ struct Number {//TODO: Cn
 
 Number numberCache[N_1] = {};//TODO: vector, non static?
 
-void computePrimes() {
+Scalar getMaxPrime(const Number &number) {
+    if (number.primes.empty()) {
+        return 1;
+    }
+    return number.primes.back();
+}
+
+bool isPowerOfPrime(Number &number) {
+    return number.primes.size() == 1;
+}
+
+void computePrimes() {//TODO: rovno s faktorizaciou
     for (Scalar n = 2; n <= N; ++n) {
         bool isPrime = true;
         for (const auto p: primes) {
@@ -121,11 +133,13 @@ PROFILE void factorize(Number& number) {
             Scalar power = 1;
             if (p * p > n) {
                 number.primes.push_back(n);
+                number.powersOfPrimes.push_back(n);
                 n = 1;
                 ++power;
             }
             if (n % p == 0) {
                 number.primes.push_back(p);
+                number.powersOfPrimes.push_back(p);
                 n /= p;
                 ++power;
             }
@@ -133,6 +147,7 @@ PROFILE void factorize(Number& number) {
                 if (p != 2) {
                     number.squareFree = false;
                 }
+                number.powersOfPrimes.back() *= p;
                 n /= p;
                 ++power;
             }
@@ -180,14 +195,9 @@ PROFILE void computePhi(Number &number) {
     }
 }
 
-Scalar getMaxPrime(const Number &number) {
-    if (number.primes.empty()) {
-        return 1;
-    }
-    return number.primes.back();
-}
-
 std::set<int> toCountWithMultiples = {};//TODO
+
+void computeOrders(Number &number);
 
 PROFILE void computeCoprimes(Number &number) {
     if (!number.coprimes.empty()) {
@@ -200,19 +210,40 @@ PROFILE void computeCoprimes(Number &number) {
     computePhi(number);
     number.coprimes.reserve(number.phi);
     if (n == 1) {
+//TODO:        number.coprimes.push_back(1);
         return;
     }
     toCountWithMultiples.insert(number.n);
-    for (Scalar e = 1; e <= n; ++e) {//TODO: computeDivisors, computeCoprimes, computeOrders
-        bool coprime = true;
-        for (const auto p : number.primes) {//TOOO: isCoprime, teoreticky even faster cez faktorizaciu oboch? takisto gcd faster?
-            if (e % p == 0) {
-                coprime = false;
-                break;
+    const auto p = getMaxPrime(number);
+    if (n == p) {
+        for (Scalar e = 1; e < n; ++e) {
+            number.coprimes.push_back(e);
+        }
+    } else if (isPowerOfPrime(number)) {
+        const auto n_p = n / p;
+        auto &number_p = numberCache[n_p];
+        computeCoprimes(number_p);
+        for (Scalar m = 0; m < n; m += n_p) {
+            for (const auto e: number_p.coprimes) {
+                number.coprimes.push_back(m + e);
             }
         }
-        if (coprime) {
-            number.coprimes.push_back(e);
+    } else {
+        const auto p_k = number.powersOfPrimes.back();
+        const auto n_p_k = n / p_k;
+        auto &number_n_p_k = numberCache[n_p_k];
+        auto &number_p_k = numberCache[p_k];
+        computeCoprimes(number_n_p_k);
+        computeOrders(number_p_k);
+        // k * n_p_k + a = e * n_p_k (mod p_k)
+        const auto r = number_p_k.inverses[n_p_k % p_k];
+        for (const auto a: number_n_p_k.coprimes) {
+            const auto b = (n - a * r) % p_k;
+            for (const auto e: number_p_k.coprimes) {
+                auto k = e + b;
+                if (k >= p_k) k -= p_k;
+                number.coprimes.push_back(k * n_p_k + a);
+            }
         }
     }
 }
