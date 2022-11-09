@@ -177,7 +177,7 @@ PROFILE void computePhi(Number &number) {
         }
         auto &number_n_p = numberCache[n_p];//TODO: computePhi
         const auto phi_p_k = p_k - p_k / p;
-        number.lambda = number_n_p.lambda * phi_p_k / gcd(numberCache[number_n_p.lambda], numberCache[phi_p_k]);
+        number.lambda = number_n_p.lambda * phi_p_k / gcd(numberCache[number_n_p.lambda], numberCache[phi_p_k]);//TODO: lcm
     }
 }
 
@@ -221,7 +221,7 @@ PROFILE void computeCoprimes(Number &number) {
     toCountWithMultiples.insert(number.n);
     const auto p = getMaxPrime(number);
     if (n == p) {
-        for (Scalar e = 1; e < n; ++e) {
+        for (Scalar e = 1; e < n; ++e) {//TODO: spojit s p^k
             number.coprimes.push_back(e);
         }
     } else if (isPowerOfPrime(number)) {
@@ -239,7 +239,7 @@ PROFILE void computeCoprimes(Number &number) {
         auto &number_n_p_k = numberCache[n_p_k];
         auto &number_p_k = numberCache[p_k];
         computeCoprimes(number_n_p_k);
-        computeOrders(number_p_k);
+        computeOrders(number_p_k);//TODO
         // k * n_p_k + a = e * n_p_k (mod p_k)
         const auto r = number_p_k.inverses[n_p_k % p_k];
         for (const auto a: number_n_p_k.coprimes) {
@@ -296,7 +296,7 @@ PROFILE void computeOrders(Number &number) {
                 powerSum = powerSum + powers[i];//TODO: reuse powerSum suborbity
             }
             powerSum = powerSum % n;
-            const auto gcdPowerSum = gcd(number, numberCache[powerSum]);
+            const auto gcdPowerSum = gcd(number, numberCache[powerSum]);//TODO: handle 0?
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
                 const auto e = powers[div];
@@ -318,7 +318,7 @@ PROFILE void reorganizeCoprimes(Number &number) {
     computeOrders(number);
     number.order2OrderIndex.resize(number.lambda + 1, -1);
     const auto& number_lambda = numberCache[number.lambda];
-    number.orderIndex2CoprimesBegin.reserve(number_lambda.divisors.size() + 1);//TODO: nemusia tam byt vsetky
+    number.orderIndex2CoprimesBegin.reserve(number_lambda.divisors.size() + 1);
     number.orderIndex2CoprimesBegin.push_back(0);
     std::vector<Scalar> coprimes; //TODO: global
     coprimes.reserve(number.phi);
@@ -380,7 +380,7 @@ PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Sca
 
 PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
     // ax = b (%n_div_d)
-    const auto gcd_a = gcd(number_n_div_d, numberCache[a]);
+    const auto gcd_a = gcd(number_n_div_d, numberCache[a]);//TODO: cast je small_n_h...
     if (gcd_b % gcd_a != 0) {
         return 0;
     }
@@ -408,7 +408,7 @@ PROFILE void countSkewmorphisms(Number &number) {
     const auto phi = number.phi;
     auto nskew = phi;
 
-    if (gcd(number, numberCache[phi]) > 1) {
+    if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
         if (const auto p_1_q_1 = isPQ(number)) {
             nskew += p_1_q_1;
         } else if (const auto a_b = isAB(number)) {
@@ -456,7 +456,7 @@ PROFILE void countSkewmorphisms(Number &number) {
                         const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
                         const auto small_gcd_n_h = n_div_d / n_h;
                         for (std::size_t i = begin; i < end; ++i) {
-                            const auto e = number_r.coprimes[i];
+                            const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
                             if (divisible3(e - 1, rH)) {//TODO: e % rH == 1
                                 continue;
                             }
