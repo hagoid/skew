@@ -378,7 +378,7 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n, const Number &number_n_h) {
+PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n, const Number &number_n_h) {//TODO: co tu robi n?
     return (((number_r.powerSums[e] - d) / rH + n) * static_cast<DoubleScalar>(power_sum) + d) % number_n_h.n;
 }
 
@@ -400,8 +400,88 @@ PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_div_d, con
     return nskew;
 }
 
-PROFILE bool divisible3(Scalar a, Scalar b) {
-    return a % b != 0;
+PROFILE bool remainder1(Scalar a, Scalar b) {
+    return a % b != 1;
+}
+
+PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
+    Scalar nskew = 0;
+    for (const auto n_h : number_n_div_d.divisors) {
+        if (n_h == 1) {//TODO: range from second / except last
+            continue;
+        }
+        auto &number_n_h = numberCache[n_h];
+        if (d > number_n_h.lambda) {
+            continue;
+        }
+        auto &number_r = number_n_h;
+        reorganizeCoprimes(number_r);
+        const auto order_index = number_r.order2OrderIndex[d];//TODO:
+        if (order_index == -1) {
+            continue;
+        }
+        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
+        const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
+        for (std::size_t i = begin; i < end; ++i) {
+            const auto e = number_r.coprimes[i];
+            if (number_r.powerSums[e] == 0) {//TODO: toto je po castiach rovnake
+                nskew += number_n_h.phi;
+            }
+        }
+    }
+    return nskew;
+}
+
+PROFILE Scalar sOtherThan1(const Scalar n, const Scalar d, const Number &number_n_div_d, const Scalar s) {
+    Scalar nskew = 0;
+    const auto power_sum = number_n_div_d.powerSums[s];
+    const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
+    const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
+    bool bComputed = false;
+    Scalar b = s - 1;
+    Scalar gcd_b;
+    for (const auto n_h : number_n_div_d.divisors) {
+        if (n_h == 1) {
+            continue;
+        }
+        if (gcd_power_sum % n_h == 0) {
+            continue;
+        }
+        auto &number_n_h = numberCache[n_h];
+        computeOrders(number_n_h);
+        const auto r = computeHelpSumsOrder(s, number_n_h);
+//        if (r < d * rH) {//TODO: toto nie je blbost?
+//            continue;
+//        }
+if (r > n) {
+throw "";
+}
+        auto &number_r = numberCache[r];//TODO: nemoze byt vacsie ako N?
+        if (d > number_r.lambda) {
+            continue;
+        }
+        reorganizeCoprimes(number_r);
+        const auto order_index = number_r.order2OrderIndex[d];
+        if (order_index == -1) {
+            continue;
+        }
+        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
+        const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
+        const auto small_gcd_n_h = number_n_div_d.n / n_h;
+        for (std::size_t i = begin; i < end; ++i) {
+            const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
+            if (remainder1(e, rH)) {
+                continue;
+            }
+            if (!bComputed) {
+                gcd_b = gcd(number_n_div_d, numberCache[b]);
+                bComputed = true;
+            }
+            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * small_gcd_n_h;
+            nskew += countCoprimeSolutions(big_vysledok, number_n_div_d, number_n_h, b, gcd_b);
+        }
+    }
+    return nskew;
 }
 
 PROFILE void countSkewmorphisms(Number &number) {
@@ -427,51 +507,13 @@ PROFILE void countSkewmorphisms(Number &number) {
                 const auto n_div_d = n / d;
                 auto &number_n_div_d = numberCache[n_div_d];
                 reorganizeCoprimes(number_n_div_d);//TODO: rename
-                for (const auto s: number_n_div_d.coprimes) {//TODO: s == 1 special?
-                    const auto power_sum = number_n_div_d.powerSums[s];
-                    const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
-                    const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
-                    bool bComputed = false;
-                    Scalar b = s - 1;
-                    Scalar gcd_b;
-                    for (const auto n_h : number_n_div_d.divisors) {
-                        if (n_h == 1) {
-                            continue;
-                        }
-                        if (gcd_power_sum % n_h == 0) {
-                            continue;
-                        }
-                        auto &number_n_h = numberCache[n_h];
-                        computeOrders(number_n_h);
-                        const auto r = computeHelpSumsOrder(s, number_n_h);
-//                        if (r < d * rH) {//TODO: toto nie je blbost?
-//                            continue;
-//                        }
-                        auto &number_r = numberCache[r];//TODO: nemoze byt vacsie ako N?
-                        if (d > number_r.lambda) {
-                            continue;
-                        }
-                        reorganizeCoprimes(number_r);
-                        const auto order_index = number_r.order2OrderIndex[d];
-                        if (order_index == -1) {
-                            continue;
-                        }
-                        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
-                        const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
-                        const auto small_gcd_n_h = n_div_d / n_h;
-                        for (std::size_t i = begin; i < end; ++i) {
-                            const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
-                            if (divisible3(e - 1, rH)) {//TODO: e % rH == 1
-                                continue;
-                            }
-                            if (!bComputed) {
-                                gcd_b = gcd(number_n_div_d, numberCache[b]);
-                                bComputed = true;
-                            }
-                            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * small_gcd_n_h;
-                            nskew += countCoprimeSolutions(big_vysledok, number_n_div_d, number_n_h, b, gcd_b);
-                        }
+
+                nskew += sEquals1(d, number_n_div_d);
+                for (const auto s: number_n_div_d.coprimes) {
+                    if (s == 1) {
+                        continue;
                     }
+                    nskew += sOtherThan1(n, d, number_n_div_d, s);
                 }
             }
         }
