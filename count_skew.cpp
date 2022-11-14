@@ -6,9 +6,11 @@
 #include <set>
 #include <vector>
 
-//TODO: profile prepinac
-//#define PROFILE __attribute__((noinline))
-#define PROFILE
+#ifdef PROFILE_FLAG
+#  define PROFILE __attribute__((noinline))
+#else
+#  define PROFILE
+#endif
 
 using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;

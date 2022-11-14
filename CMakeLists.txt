@@ -3,5 +3,10 @@ project(skew)
 
 set(CMAKE_CXX_STANDARD 14)
 
+option(PROFILE_FLAG OFF)
+if (PROFILE_FLAG)
+    add_compile_definitions(PROFILE_FLAG)
+endif(PROFILE_FLAG)
+
 add_executable(skew skew.cpp)
 add_executable(count_skew count_skew.cpp)
