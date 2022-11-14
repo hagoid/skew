@@ -382,22 +382,17 @@ PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Sca
     return (((number_r.powerSums[e] - d) / rH + n) * static_cast<DoubleScalar>(power_sum) + d) % number_n_h.n;
 }
 
-PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_div_d, const Number &number_n_h, Scalar b, Scalar gcd_b) {
-    // ax = b (%n_div_d)
-    const auto gcd_a = gcd(number_n_div_d, numberCache[a]);//TODO: cast je small_n_h...
-    if (gcd_b % gcd_a != 0) {
+PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_h, Scalar gcd_b) {//TODO: priamo cez rozklad
+    // ax = b (%n_h)
+    const auto gcd_a = gcd(number_n_h, numberCache[a]);
+    if (gcd_b != gcd_a) {
         return 0;
     }
-    auto &number = numberCache[number_n_div_d.n / gcd_a];
-    computeOrders(number);//TODO:
-    const auto x = b == 0 ? 0 : (number.inverses[a / gcd_a] * b / gcd_a) % number.n;
-    Scalar nskew = 0;
-    for (Scalar sol = x; sol < number_n_h.n; sol += number.n) {
-        if (number_n_h.orders[sol] != 0) {
-            ++nskew;
-        }
-    }
-    return nskew;
+    auto &number = numberCache[number_n_h.n / gcd_a];
+    const auto &number_ga = numberCache[gcd_a];
+    const auto gaa = gcd(number, number_ga);
+    const auto &number_gaa = numberCache[gaa];
+    return gaa * number_ga.phi / number_gaa.phi;
 }
 
 PROFILE bool remainder1(Scalar a, Scalar b) {
@@ -447,6 +442,10 @@ PROFILE Scalar sOtherThan1(const Scalar n, const Scalar d, const Number &number_
         if (gcd_power_sum % n_h == 0) {
             continue;
         }
+        const auto small_gcd_n_h = number_n_div_d.n / n_h;
+        if (b % small_gcd_n_h != 0) {
+            continue;
+        }
         auto &number_n_h = numberCache[n_h];
         computeOrders(number_n_h);
         const auto r = computeHelpSumsOrder(s, number_n_h);
@@ -467,7 +466,6 @@ throw "";
         }
         const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
         const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
-        const auto small_gcd_n_h = number_n_div_d.n / n_h;
         for (std::size_t i = begin; i < end; ++i) {
             const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
             if (remainder1(e, rH)) {
@@ -477,8 +475,8 @@ throw "";
                 gcd_b = gcd(number_n_div_d, numberCache[b]);
                 bComputed = true;
             }
-            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h) * small_gcd_n_h;
-            nskew += countCoprimeSolutions(big_vysledok, number_n_div_d, number_n_h, b, gcd_b);
+            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h);
+            nskew += countCoprimeSolutions(big_vysledok, number_n_h, gcd_b / small_gcd_n_h);//TODO: bez nutnosti delenia
         }
     }
     return nskew;
