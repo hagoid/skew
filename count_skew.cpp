@@ -320,27 +320,54 @@ PROFILE void computeOrders(Number &number) {
     }
 }
 
-PROFILE void reorganizeCoprimes(Number &number) {
+PROFILE void computeCoprimesSortedByOrder(Number &number) {
     if (!number.order2OrderIndex.empty()) {
         return;
     }
     computeOrders(number);
     number.order2OrderIndex.resize(number.lambda + 1, -1);
-    const auto& number_lambda = numberCache[number.lambda];
-    number.orderIndex2CoprimesBegin.reserve(number_lambda.divisors.size() + 1);
-    number.orderIndex2CoprimesBegin.push_back(0);
-    std::vector<Scalar> coprimes; //TODO: global
-    coprimes.reserve(number.phi);
-    for (const auto o: number_lambda.divisors) {
-        number.order2OrderIndex[o] = number.orderIndex2CoprimesBegin.size() - 1;
-        for (const auto coprime: number.coprimes) {
-            if (number.orders[coprime] == o) {//TODO: N^2
-                coprimes.push_back(coprime);
+    const auto &possibleOrders = numberCache[number.lambda].divisors;
+    number.orderIndex2CoprimesBegin.resize(possibleOrders.size() + 1);
+    number.orderIndex2CoprimesBegin[0] = 0;
+    number.orderIndex2CoprimesBegin[possibleOrders.size()] = number.coprimes.size();
+
+    std::vector<std::size_t> knownOrderBegins;
+    std::vector<std::size_t> nextKnownOrderBegins;
+    knownOrderBegins.reserve(possibleOrders.size());
+    nextKnownOrderBegins.reserve(possibleOrders.size());
+
+    nextKnownOrderBegins.push_back(0);
+    nextKnownOrderBegins.push_back(possibleOrders.size());
+
+    while (knownOrderBegins.size() < possibleOrders.size()) {
+        knownOrderBegins.swap(nextKnownOrderBegins);
+        nextKnownOrderBegins.clear();
+
+        auto begin = knownOrderBegins[0];
+        nextKnownOrderBegins.push_back(begin);
+        for (std::size_t i = 1; i < knownOrderBegins.size(); ++i) {
+            const auto end = knownOrderBegins[i];
+            const auto middle = (begin + end) / 2;
+            if (middle != begin) {
+                nextKnownOrderBegins.push_back(middle);
+                const auto middleOrder = possibleOrders[middle];
+
+                const auto &beginIterator = number.coprimes.begin() + number.orderIndex2CoprimesBegin[begin];
+                const auto &endIterator = number.coprimes.begin() + number.orderIndex2CoprimesBegin[end];
+                const auto &middleIterator = std::partition(beginIterator, endIterator,
+                                                            [middleOrder, &number](const auto &item) {
+                                                                return number.orders[item] < middleOrder;
+                                                            });
+
+                number.orderIndex2CoprimesBegin[middle] = middleIterator - number.coprimes.begin();//TODO: store iterators
             }
+            nextKnownOrderBegins.push_back(end);
+            begin = end;
         }
-        number.orderIndex2CoprimesBegin.push_back(coprimes.size());
     }
-    coprimes.swap(number.coprimes);
+    for (Scalar i = 0; i < possibleOrders.size(); ++i) {
+        number.order2OrderIndex[possibleOrders[i]] = i;
+    }
 }
 
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
@@ -415,7 +442,7 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
             continue;
         }
         auto &number_r = number_n_h;
-        reorganizeCoprimes(number_r);
+        computeCoprimesSortedByOrder(number_r);
         const auto order_index = number_r.order2OrderIndex[d];//TODO:
         if (order_index == -1) {
             continue;
@@ -436,7 +463,7 @@ PROFILE Scalar sOtherThan1(const Scalar n, const Scalar d, const Number &number_
     Scalar nskew = 0;
     const auto power_sum = number_n_div_d.powerSums[s];
     const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
-    const Scalar rH = number_n_div_d.orders[s];//TODO: reorganized?
+    const Scalar rH = number_n_div_d.orders[s];//TODO: sorted by order?
     bool bComputed = false;
     Scalar b = s - 1;
     Scalar gcd_b;
@@ -464,7 +491,7 @@ throw "";
         if (d > number_r.lambda) {
             continue;
         }
-        reorganizeCoprimes(number_r);
+        computeCoprimesSortedByOrder(number_r);
         const auto order_index = number_r.order2OrderIndex[d];
         if (order_index == -1) {
             continue;
@@ -509,7 +536,7 @@ PROFILE void countSkewmorphisms(Number &number) {
                 }
                 const auto n_div_d = n / d;
                 auto &number_n_div_d = numberCache[n_div_d];
-                reorganizeCoprimes(number_n_div_d);//TODO: rename
+                computeCoprimesSortedByOrder(number_n_div_d);
 
                 nskew += sEquals1(d, number_n_div_d);
                 for (const auto s: number_n_div_d.coprimes) {
