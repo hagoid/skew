@@ -243,7 +243,7 @@ PROFILE void computeCoprimes(Number &number) {
         computeCoprimes(number_n_p_k);
         computeOrders(number_p_k);//TODO
         // k * n_p_k + a = e * n_p_k (mod p_k)
-        const auto r = number_p_k.inverses[n_p_k % p_k];
+        const auto r = number_p_k.inverses[n_p_k % p_k];//TODO: jediny usage inverzov
         for (const auto a: number_n_p_k.coprimes) {
             const auto b = (n - a * r) % p_k;
             for (const auto e: number_p_k.coprimes) {
@@ -266,15 +266,16 @@ PROFILE void computeOrders(Number &number) {
     computeCoprimes(number);
     if (n == 1) {
         number.orders = {1};
-        number.inverses = {0};
         number.powerSums = {0};
         number.gcdPowerSums = {0};
         return;
     }
     number.orders.resize(n, 0);
     number.orders[1] = 1;
-    number.inverses.resize(n, 0);
-    number.inverses[1] = 1;
+    if (isPowerOfPrime(number)) {
+        number.inverses.resize(n, 0);
+        number.inverses[1] = 1;
+    }
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
     number.powerSums[1] = 1;
     number.gcdPowerSums.resize(n, 0);
@@ -311,8 +312,10 @@ PROFILE void computeOrders(Number &number) {
                 number.gcdPowerSums[e] = gcdPowerSum;
             }
         }
-        for (std::size_t i = 1; i < powers.size(); ++i) {
-            number.inverses[powers[i]] = powers[powers.size() - i];
+        if (isPowerOfPrime(number) && powers.size() == number.coprimes.size()) {
+            for (std::size_t i = 1; i < powers.size(); ++i) {
+                number.inverses[powers[i]] = powers[powers.size() - i];
+            }
         }
     }
 }
