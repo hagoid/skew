@@ -242,14 +242,14 @@ PROFILE void computeCoprimes(Number &number) {
         auto &number_p_k = numberCache[p_k];
         computeCoprimes(number_n_p_k);
         computeOrders(number_p_k);//TODO
-        // k * n_p_k + a = e * n_p_k (mod p_k)
+        // l * n_p_k + a = e * n_p_k (mod p_k)
         const auto r = number_p_k.inverses[n_p_k % p_k];//TODO: jediny usage inverzov
         for (const auto a: number_n_p_k.coprimes) {
             const auto b = (n - a * r) % p_k;
             for (const auto e: number_p_k.coprimes) {
-                auto k = e + b;
-                if (k >= p_k) k -= p_k;
-                number.coprimes.push_back(k * n_p_k + a);
+                auto l = e + b;
+                if (l >= p_k) l -= p_k;
+                number.coprimes.push_back(l * n_p_k + a);
             }
         }
     }
@@ -410,8 +410,8 @@ PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
     }
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n, const Number &number_n_h) {//TODO: co tu robi n?
-    return (((number_r.powerSums[e] - d) / rH + n) * static_cast<DoubleScalar>(power_sum) + d) % number_n_h.n;
+PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n_h) {
+    return (((number_r.powerSums[e] - d) / rH + n_h) * static_cast<DoubleScalar>(power_sum) + d) % n_h;
 }
 
 PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_h, Scalar gcd_b) {//TODO: priamo cez rozklad
@@ -459,7 +459,7 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     return nskew;
 }
 
-PROFILE Scalar sOtherThan1(const Scalar n, const Scalar d, const Number &number_n_div_d, const Scalar s) {
+PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, const Scalar s) {
     Scalar nskew = 0;
     const auto power_sum = number_n_div_d.powerSums[s];
     const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
@@ -484,9 +484,10 @@ PROFILE Scalar sOtherThan1(const Scalar n, const Scalar d, const Number &number_
 //        if (r < d * rH) {//TODO: toto nie je blbost?
 //            continue;
 //        }
-if (r > n) {
-throw "";
-}
+
+//if (r > n) {
+//throw "";
+//}
         auto &number_r = numberCache[r];//TODO: nemoze byt vacsie ako N?
         if (d > number_r.lambda) {
             continue;
@@ -507,7 +508,7 @@ throw "";
                 gcd_b = gcd(number_n_div_d, numberCache[b]);
                 bComputed = true;
             }
-            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n, number_n_h);
+            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
             nskew += countCoprimeSolutions(big_vysledok, number_n_h, gcd_b / small_gcd_n_h);//TODO: bez nutnosti delenia
         }
     }
@@ -531,7 +532,7 @@ PROFILE void countSkewmorphisms(Number &number) {
             const auto maxPrime = getMaxPrime(number);
             const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
             for (const auto d: number_n_div_maxPrime.divisors) {
-                if (d == 1 || d == n) {
+                if (d == 1) {
                     continue;
                 }
                 const auto n_div_d = n / d;
@@ -543,7 +544,7 @@ PROFILE void countSkewmorphisms(Number &number) {
                     if (s == 1) {
                         continue;
                     }
-                    nskew += sOtherThan1(n, d, number_n_div_d, s);
+                    nskew += sOtherThan1(d, number_n_div_d, s);
                 }
             }
         }
