@@ -538,7 +538,7 @@ PROFILE void countSkewmorphisms(Number &number) {
 
                 nskew += sEquals1(d, number_n_div_d);
                 for (const auto s: number_n_div_d.coprimes) {
-                    if (s == 1) {
+                    if (s <= d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
                         continue;
                     }
                     nskew += sOtherThan1(d, number_n_div_d, s);
