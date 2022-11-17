@@ -133,7 +133,7 @@ PROFILE void factorize(Number& number, const std::vector<Scalar> &primes) {
         number.powersOfPrimes.push_back(powerOfPrime);
         if (n == 1) {
             number.divisors.reserve(divisorsCount);
-            for (Scalar power = 1; power <= powerOfPrime; power *= prime) {
+            for (DoubleScalar power = 1; power <= powerOfPrime; power *= prime) {
                 number.divisors.push_back(power);
             }
         } else {
