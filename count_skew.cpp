@@ -434,7 +434,7 @@ PROFILE bool remainder1(Scalar a, Scalar b) {
 PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     Scalar nskew = 0;
     for (const auto n_h : number_n_div_d.divisors) {
-        if (n_h == 1) {//TODO: range from second / except last
+        if (n_h < d) {//TODO: range from second / except last / skip based on predicate
             continue;
         }
         auto &number_n_h = numberCache[n_h];
@@ -467,8 +467,9 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, const S
     bool bComputed = false;
     Scalar b = s - 1;
     Scalar gcd_b;
+    const auto min_r = d * rH;//TODO: better estimate?
     for (const auto n_h : number_n_div_d.divisors) {
-        if (n_h == 1) {
+        if (n_h < min_r) {
             continue;
         }
         if (gcd_power_sum % n_h == 0) {
@@ -481,14 +482,10 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, const S
         auto &number_n_h = numberCache[n_h];
         computeOrders(number_n_h);
         const auto r = computeHelpSumsOrder(s, number_n_h);
-//        if (r < d * rH) {//TODO: toto nie je blbost?
-//            continue;
-//        }
-
-//if (r > n) {
-//throw "";
-//}
-        auto &number_r = numberCache[r];//TODO: nemoze byt vacsie ako N?
+        if (r < min_r) {
+            continue;
+        }
+        auto &number_r = numberCache[r];
         if (d > number_r.lambda) {
             continue;
         }
