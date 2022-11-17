@@ -459,54 +459,59 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     return nskew;
 }
 
-PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, const Scalar s) {
+PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
     Scalar nskew = 0;
-    const auto power_sum = number_n_div_d.powerSums[s];
-    const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
-    const Scalar rH = number_n_div_d.orders[s];//TODO: sorted by order?
-    bool bComputed = false;
-    Scalar b = s - 1;
-    Scalar gcd_b;
-    const auto min_r = d * rH;//TODO: better estimate?
-    for (const auto n_h : number_n_div_d.divisors) {
-        if (n_h < min_r) {
+    for (const auto s: number_n_div_d.coprimes) {
+        if (s <= d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
             continue;
         }
-        if (gcd_power_sum % n_h == 0) {
-            continue;
-        }
-        const auto small_gcd_n_h = number_n_div_d.n / n_h;
-        if (b % small_gcd_n_h != 0) {
-            continue;
-        }
-        auto &number_n_h = numberCache[n_h];
-        computeOrders(number_n_h);
-        const auto r = computeHelpSumsOrder(s, number_n_h);
-        if (r < min_r) {
-            continue;
-        }
-        auto &number_r = numberCache[r];
-        if (d > number_r.lambda) {
-            continue;
-        }
-        computeCoprimesSortedByOrder(number_r);
-        const auto order_index = number_r.order2OrderIndex[d];
-        if (order_index == -1) {
-            continue;
-        }
-        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
-        const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
-        for (std::size_t i = begin; i < end; ++i) {
-            const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
-            if (remainder1(e, rH)) {
+        const auto power_sum = number_n_div_d.powerSums[s];
+        const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
+        const Scalar rH = number_n_div_d.orders[s];//TODO: sorted by order?
+        bool bComputed = false;
+        Scalar b = s - 1;
+        Scalar gcd_b;
+        const auto min_r = d * rH;//TODO: better estimate?
+        for (const auto n_h: number_n_div_d.divisors) {
+            if (n_h < min_r) {
                 continue;
             }
-            if (!bComputed) {
-                gcd_b = gcd(number_n_div_d, numberCache[b]);
-                bComputed = true;
+            if (gcd_power_sum % n_h == 0) {
+                continue;
             }
-            const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
-            nskew += countCoprimeSolutions(big_vysledok, number_n_h, gcd_b / small_gcd_n_h);//TODO: bez nutnosti delenia
+            const auto small_gcd_n_h = number_n_div_d.n / n_h;
+            if (b % small_gcd_n_h != 0) {
+                continue;
+            }
+            auto &number_n_h = numberCache[n_h];
+            computeOrders(number_n_h);
+            const auto r = computeHelpSumsOrder(s, number_n_h);
+            if (r < min_r) {
+                continue;
+            }
+            auto &number_r = numberCache[r];
+            if (d > number_r.lambda) {
+                continue;
+            }
+            computeCoprimesSortedByOrder(number_r);
+            const auto order_index = number_r.order2OrderIndex[d];
+            if (order_index == -1) {
+                continue;
+            }
+            const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
+            const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
+            for (std::size_t i = begin; i < end; ++i) {
+                const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
+                if (remainder1(e, rH)) {
+                    continue;
+                }
+                if (!bComputed) {
+                    gcd_b = gcd(number_n_div_d, numberCache[b]);
+                    bComputed = true;
+                }
+                const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
+                nskew += countCoprimeSolutions(big_vysledok, number_n_h,gcd_b / small_gcd_n_h);//TODO: bez nutnosti delenia
+            }
         }
     }
     return nskew;
@@ -534,15 +539,10 @@ PROFILE void countSkewmorphisms(Number &number) {
                 }
                 const auto n_div_d = n / d;
                 auto &number_n_div_d = numberCache[n_div_d];
-                computeCoprimesSortedByOrder(number_n_div_d);
+                computeCoprimesSortedByOrder(number_n_div_d);//TODO: necessary?
 
                 nskew += sEquals1(d, number_n_div_d);
-                for (const auto s: number_n_div_d.coprimes) {
-                    if (s <= d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
-                        continue;
-                    }
-                    nskew += sOtherThan1(d, number_n_div_d, s);
-                }
+                nskew += sOtherThan1(d, number_n_div_d);
             }
         }
     }
