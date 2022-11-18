@@ -461,56 +461,62 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
 
 PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
     Scalar nskew = 0;
-    for (const auto s: number_n_div_d.coprimes) {
-        if (s <= d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
+    for (const auto gcd_b: number_n_div_d.divisors) {
+        if (gcd_b == number_n_div_d.n) {
             continue;
         }
-        const auto power_sum = number_n_div_d.powerSums[s];
-        const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
-        const Scalar rH = number_n_div_d.orders[s];//TODO: sorted by order?
-        bool bComputed = false;
-        Scalar b = s - 1;
-        Scalar gcd_b;
-        const auto min_r = d * rH;//TODO: better estimate?
-        for (const auto n_h: number_n_div_d.divisors) {
-            if (n_h < min_r) {
+        auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
+        computeCoprimesSortedByOrder(number_n_b);
+        for (const auto coprime_b: number_n_b.coprimes) {
+            const auto b = gcd_b * coprime_b;
+            const auto s = b + 1;
+            if (s <= d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
                 continue;
             }
-            if (gcd_power_sum % n_h == 0) {
+            if (s >= number_n_div_d.n) {
                 continue;
             }
-            const auto small_gcd_n_h = number_n_div_d.n / n_h;
-            if (b % small_gcd_n_h != 0) {
+            const auto rH = number_n_div_d.orders[s];//TODO: sorted by order?
+            if (rH == 0) {
                 continue;
             }
-            auto &number_n_h = numberCache[n_h];
-            computeOrders(number_n_h);
-            const auto r = computeHelpSumsOrder(s, number_n_h);
-            if (r < min_r) {
-                continue;
-            }
-            auto &number_r = numberCache[r];
-            if (d > number_r.lambda) {
-                continue;
-            }
-            computeCoprimesSortedByOrder(number_r);
-            const auto order_index = number_r.order2OrderIndex[d];
-            if (order_index == -1) {
-                continue;
-            }
-            const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
-            const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
-            for (std::size_t i = begin; i < end; ++i) {
-                const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
-                if (remainder1(e, rH)) {
+            const auto power_sum = number_n_div_d.powerSums[s];
+            const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
+            const auto min_r = d * rH;//TODO: better estimate?
+            const auto &number_gcd_b = numberCache[gcd_b];
+            for (const auto gcd_nh_b: number_gcd_b.divisors) {
+                const auto n_h = number_n_b.n * gcd_nh_b;
+                if (n_h < min_r) {
                     continue;
                 }
-                if (!bComputed) {
-                    gcd_b = gcd(number_n_div_d, numberCache[b]);
-                    bComputed = true;
+                if (gcd_power_sum % n_h == 0) {
+                    continue;
                 }
-                const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
-                nskew += countCoprimeSolutions(big_vysledok, number_n_h,gcd_b / small_gcd_n_h);//TODO: bez nutnosti delenia
+                auto &number_n_h = numberCache[n_h];
+                computeOrders(number_n_h);
+                const auto r = computeHelpSumsOrder(s, number_n_h);
+                if (r < min_r) {
+                    continue;
+                }
+                auto &number_r = numberCache[r];
+                if (d > number_r.lambda) {
+                    continue;
+                }
+                computeCoprimesSortedByOrder(number_r);
+                const auto order_index = number_r.order2OrderIndex[d];
+                if (order_index == -1) {
+                    continue;
+                }
+                const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
+                const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
+                for (std::size_t i = begin; i < end; ++i) {
+                    const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
+                    if (remainder1(e, rH)) {
+                        continue;
+                    }
+                    const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
+                    nskew += countCoprimeSolutions(big_vysledok, number_n_h, gcd_nh_b);
+                }
             }
         }
     }
