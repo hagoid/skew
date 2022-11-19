@@ -465,17 +465,14 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
         if (gcd_b == number_n_div_d.n) {
             continue;
         }
+        if (gcd_b < d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
+            continue;
+        }
         auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
         computeCoprimesSortedByOrder(number_n_b);
         for (const auto coprime_b: number_n_b.coprimes) {
             const auto b = gcd_b * coprime_b;
             const auto s = b + 1;
-            if (s <= d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
-                continue;
-            }
-            if (s >= number_n_div_d.n) {
-                continue;
-            }
             const auto rH = number_n_div_d.orders[s];//TODO: sorted by order?
             if (rH == 0) {
                 continue;
@@ -485,8 +482,11 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
             const auto min_r = d * rH;//TODO: better estimate?
             const auto &number_gcd_b = numberCache[gcd_b];
             for (const auto gcd_nh_b: number_gcd_b.divisors) {
+                if (gcd_nh_b < d) {
+                    continue;
+                }
                 const auto n_h = number_n_b.n * gcd_nh_b;
-                if (n_h < min_r) {
+                if (n_h < min_r) {//TODO: necessary?
                     continue;
                 }
                 if (gcd_power_sum % n_h == 0) {
