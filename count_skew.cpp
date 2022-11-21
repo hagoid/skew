@@ -19,8 +19,6 @@ struct Number {//TODO: Cn
     std::vector<Scalar> primes;
     std::vector<Scalar> powersOfPrimes;
     std::vector<Scalar> orders;// TODO: s v deliteli n
-    std::vector<Scalar> order2OrderIndex;
-    std::vector<Scalar> orderIndex2CoprimesBegin;
     std::vector<Scalar> divisors;
     std::vector<Scalar> coprimes;//TODO: vector vectorov
     std::vector<Scalar> inverses;
@@ -320,56 +318,6 @@ PROFILE void computeOrders(Number &number) {
     }
 }
 
-PROFILE void computeCoprimesSortedByOrder(Number &number) {
-    if (!number.order2OrderIndex.empty()) {
-        return;
-    }
-    computeOrders(number);
-    number.order2OrderIndex.resize(number.lambda + 1, -1);
-    const auto &possibleOrders = numberCache[number.lambda].divisors;
-    number.orderIndex2CoprimesBegin.resize(possibleOrders.size() + 1);
-    number.orderIndex2CoprimesBegin[0] = 0;
-    number.orderIndex2CoprimesBegin[possibleOrders.size()] = number.coprimes.size();
-
-    std::vector<std::size_t> knownOrderBegins;
-    std::vector<std::size_t> nextKnownOrderBegins;
-    knownOrderBegins.reserve(possibleOrders.size());
-    nextKnownOrderBegins.reserve(possibleOrders.size());
-
-    nextKnownOrderBegins.push_back(0);
-    nextKnownOrderBegins.push_back(possibleOrders.size());
-
-    while (knownOrderBegins.size() < possibleOrders.size()) {
-        knownOrderBegins.swap(nextKnownOrderBegins);
-        nextKnownOrderBegins.clear();
-
-        auto begin = knownOrderBegins[0];
-        nextKnownOrderBegins.push_back(begin);
-        for (std::size_t i = 1; i < knownOrderBegins.size(); ++i) {
-            const auto end = knownOrderBegins[i];
-            const auto middle = (begin + end) / 2;
-            if (middle != begin) {
-                nextKnownOrderBegins.push_back(middle);
-                const auto middleOrder = possibleOrders[middle];
-
-                const auto &beginIterator = number.coprimes.begin() + number.orderIndex2CoprimesBegin[begin];
-                const auto &endIterator = number.coprimes.begin() + number.orderIndex2CoprimesBegin[end];
-                const auto &middleIterator = std::partition(beginIterator, endIterator,
-                                                            [middleOrder, &number](const auto &item) {
-                                                                return number.orders[item] < middleOrder;
-                                                            });
-
-                number.orderIndex2CoprimesBegin[middle] = middleIterator - number.coprimes.begin();//TODO: store iterators
-            }
-            nextKnownOrderBegins.push_back(end);
-            begin = end;
-        }
-    }
-    for (Scalar i = 0; i < possibleOrders.size(); ++i) {
-        number.order2OrderIndex[possibleOrders[i]] = i;
-    }
-}
-
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
     if (number.squareFree && number.powerOfTwo <= 2 && number.primes.size() == 2) {
         return (number.primes[0] - 1) * (number.primes[1] - 1);
@@ -427,10 +375,6 @@ PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_h, Scalar 
     return gaa * number_ga.phi / number_gaa.phi;
 }
 
-PROFILE bool remainder1(Scalar a, Scalar b) {
-    return a % b != 1;
-}
-
 PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     Scalar nskew = 0;
     for (const auto n_h : number_n_div_d.divisors) {
@@ -438,20 +382,13 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
             continue;
         }
         auto &number_n_h = numberCache[n_h];
-        if (d > number_n_h.lambda) {
+        if (number_n_h.lambda % d != 0) {
             continue;
         }
         auto &number_r = number_n_h;
-        computeCoprimesSortedByOrder(number_r);
-        const auto order_index = number_r.order2OrderIndex[d];//TODO:
-        if (order_index == -1) {
-            continue;
-        }
-        const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
-        const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
-        for (std::size_t i = begin; i < end; ++i) {
-            const auto e = number_r.coprimes[i];
-            if (number_r.powerSums[e] == 0) {//TODO: toto je po castiach rovnake
+        computeOrders(number_r);
+        for (auto e = 2; e < n_h; ++e) {
+            if (number_r.orders[e] == d && number_r.powerSums[e] == 0) {//TODO: toto je po castiach rovnake
                 nskew += number_n_h.phi;
             }
         }
@@ -469,7 +406,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
             continue;
         }
         auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
-        computeCoprimesSortedByOrder(number_n_b);
+        computeOrders(number_n_b);//TODO: coprimes?
         for (const auto coprime_b: number_n_b.coprimes) {
             const auto b = gcd_b * coprime_b;
             const auto s = b + 1;
@@ -499,19 +436,12 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                     continue;
                 }
                 auto &number_r = numberCache[r];
-                if (d > number_r.lambda) {
+                if (number_r.lambda % d != 0) {
                     continue;
                 }
-                computeCoprimesSortedByOrder(number_r);
-                const auto order_index = number_r.order2OrderIndex[d];
-                if (order_index == -1) {
-                    continue;
-                }
-                const auto begin = number_r.orderIndex2CoprimesBegin[order_index];//TODO: len pre d ktore davaju zmysel?
-                const auto end = number_r.orderIndex2CoprimesBegin[order_index + 1];
-                for (std::size_t i = begin; i < end; ++i) {
-                    const auto e = number_r.coprimes[i];//TODO: iterate e % rH == 1
-                    if (remainder1(e, rH)) {
+                computeOrders(number_r);//TODO: inplace
+                for (auto e = rH + 1; e < r; e += rH) {
+                    if (number_r.orders[e] != d) {
                         continue;
                     }
                     const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
@@ -545,7 +475,7 @@ PROFILE void countSkewmorphisms(Number &number) {
                 }
                 const auto n_div_d = n / d;
                 auto &number_n_div_d = numberCache[n_div_d];
-                computeCoprimesSortedByOrder(number_n_div_d);//TODO: necessary?
+                computeOrders(number_n_div_d);//TODO: necessary?
 
                 nskew += sEquals1(d, number_n_div_d);
                 nskew += sOtherThan1(d, number_n_div_d);
@@ -576,11 +506,9 @@ void fprint(const Number &number, std::ostream& stream) {
 }
 
 void clear(Number &number) {
-    if (!number.coprimes.empty()) {
+    if (!number.coprimes.empty()) {//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.orders = std::vector<Scalar>{};
         number.coprimes = std::vector<Scalar>{};
-        number.order2OrderIndex = std::vector<Scalar>{};
-        number.orderIndex2CoprimesBegin = std::vector<Scalar>{};//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.inverses = std::vector<Scalar>{};
         number.powerSums = std::vector<Scalar>{};
         number.gcdPowerSums = std::vector<Scalar>{};
