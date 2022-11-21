@@ -346,18 +346,6 @@ Scalar isAB(const Number &number) {
     return 0;
 }
 
-PROFILE Scalar computeHelpSumsOrder(Scalar s, const Number &number_n_h) {
-    const auto n_h = number_n_h.n;
-    const auto s_mod = s % n_h;
-    const auto orderSumsCount = number_n_h.orders[s_mod];
-    const auto h_value = number_n_h.gcdPowerSums[s_mod];
-    if (h_value == n_h) {//TODO:
-        return orderSumsCount;
-    } else {
-        return orderSumsCount * (n_h / h_value);
-    }
-}
-
 PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n_h) {
     return (((number_r.powerSums[e] - d) / rH + n_h) * static_cast<DoubleScalar>(power_sum) + d) % n_h;
 }
@@ -385,10 +373,9 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
         if (number_n_h.lambda % d != 0) {
             continue;
         }
-        auto &number_r = number_n_h;
-        computeOrders(number_r);
+        computeOrders(number_n_h);
         for (auto e = 2; e < n_h; ++e) {
-            if (number_r.orders[e] == d && number_r.powerSums[e] == 0) {//TODO: toto je po castiach rovnake
+            if (number_n_h.orders[e] == d && number_n_h.powerSums[e] == 0) {//TODO: toto je po castiach rovnake
                 nskew += number_n_h.phi;
             }
         }
@@ -415,7 +402,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 continue;
             }
             const auto power_sum = number_n_div_d.powerSums[s];
-            const auto gcd_power_sum = number_n_div_d.gcdPowerSums[s];
+            const auto gcd_power_sum_b = number_n_div_d.gcdPowerSums[s] / number_n_b.n;
             const auto min_r = d * rH;//TODO: better estimate?
             const auto &number_gcd_b = numberCache[gcd_b];
             for (const auto gcd_nh_b: number_gcd_b.divisors) {
@@ -426,15 +413,15 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 if (n_h < min_r) {//TODO: necessary?
                     continue;
                 }
-                if (gcd_power_sum % n_h == 0) {
+                if (gcd_power_sum_b % gcd_nh_b == 0) {//TODO: gcd ratame o riadok nizsie
                     continue;
                 }
-                auto &number_n_h = numberCache[n_h];
-                computeOrders(number_n_h);
-                const auto r = computeHelpSumsOrder(s, number_n_h);
-                if (r < min_r) {
+                const auto g_p = gcd(numberCache[gcd_power_sum_b], numberCache[gcd_nh_b]);
+                const auto g_r = gcd_nh_b / g_p;
+                if (g_r < d) {
                     continue;
                 }
+                const auto r = rH * g_r;
                 auto &number_r = numberCache[r];
                 if (number_r.lambda % d != 0) {
                     continue;
@@ -445,7 +432,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                         continue;
                     }
                     const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
-                    nskew += countCoprimeSolutions(big_vysledok, number_n_h, gcd_nh_b);
+                    nskew += countCoprimeSolutions(big_vysledok, numberCache[n_h], gcd_nh_b);
                 }
             }
         }
@@ -469,7 +456,7 @@ PROFILE void countSkewmorphisms(Number &number) {
         } else {
             const auto maxPrime = getMaxPrime(number);
             const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
-            for (const auto d: number_n_div_maxPrime.divisors) {
+            for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
                 if (d == 1) {
                     continue;
                 }
