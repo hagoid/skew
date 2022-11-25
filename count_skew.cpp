@@ -23,7 +23,6 @@ struct Number {//TODO: Cn
     std::vector<Scalar> coprimes;//TODO: vector vectorov
     std::vector<Scalar> inverses;
     std::vector<Scalar> powerSums;
-    std::vector<Scalar> gcdPowerSums;
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
@@ -265,7 +264,6 @@ PROFILE void computeOrders(Number &number) {
     if (n == 1) {
         number.orders = {1};
         number.powerSums = {0};
-        number.gcdPowerSums = {0};
         return;
     }
     number.orders.resize(n, 0);
@@ -276,8 +274,6 @@ PROFILE void computeOrders(Number &number) {
     }
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
     number.powerSums[1] = 1;
-    number.gcdPowerSums.resize(n, 0);
-    number.gcdPowerSums[1] = 1;
     std::vector<Scalar> powers; //TODO: global
     powers.reserve(number.lambda);
     for (const auto c: number.coprimes) {
@@ -301,13 +297,11 @@ PROFILE void computeOrders(Number &number) {
                 powerSum = powerSum + powers[i];//TODO: reuse powerSum suborbity
             }
             powerSum = powerSum % n;
-            const auto gcdPowerSum = gcd(number, numberCache[powerSum]);//TODO: handle 0?
             for (const auto cop: oNumber.coprimes) {
                 const auto div = cop * divisor;//TODO: rename
                 const auto e = powers[div];
                 number.orders[e] = o;
                 number.powerSums[e] = powerSum;
-                number.gcdPowerSums[e] = gcdPowerSum;
             }
         }
         if (isPowerOfPrime(number) && powers.size() == number.coprimes.size()) {
@@ -402,7 +396,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 continue;
             }
             const auto power_sum = number_n_div_d.powerSums[s];
-            const auto gcd_power_sum_b = number_n_div_d.gcdPowerSums[s] / number_n_b.n;
+            const auto power_sum_b = power_sum / number_n_b.n;
             const auto min_r = d * rH;//TODO: better estimate?
             const auto &number_gcd_b = numberCache[gcd_b];
             for (const auto gcd_nh_b: number_gcd_b.divisors) {
@@ -413,10 +407,10 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 if (n_h < min_r) {//TODO: necessary?
                     continue;
                 }
-                if (gcd_power_sum_b % gcd_nh_b == 0) {//TODO: gcd ratame o riadok nizsie
+                if (power_sum_b % gcd_nh_b == 0) {//TODO: gcd ratame o riadok nizsie
                     continue;
                 }
-                const auto g_p = gcd(numberCache[gcd_power_sum_b], numberCache[gcd_nh_b]);
+                const auto g_p = gcd(numberCache[power_sum_b], numberCache[gcd_nh_b]);
                 const auto g_r = gcd_nh_b / g_p;
                 if (g_r < d) {
                     continue;
@@ -498,7 +492,6 @@ void clear(Number &number) {
         number.coprimes = std::vector<Scalar>{};
         number.inverses = std::vector<Scalar>{};
         number.powerSums = std::vector<Scalar>{};
-        number.gcdPowerSums = std::vector<Scalar>{};
         toCountWithMultiples.erase(number.n);
     }
 }
