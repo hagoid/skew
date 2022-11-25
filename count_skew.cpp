@@ -21,7 +21,6 @@ struct Number {//TODO: Cn
     std::vector<Scalar> orders;// TODO: s v deliteli n
     std::vector<Scalar> divisors;
     std::vector<Scalar> coprimes;//TODO: vector vectorov
-    std::vector<Scalar> inverses;
     std::vector<Scalar> powerSums;
     Scalar n;
     Scalar powerOfTwo = 0;
@@ -51,6 +50,22 @@ PROFILE Scalar gcd(Scalar n, Scalar k) {
         k = new_k;
     }
     return n;
+}
+
+PROFILE Scalar inverse(Scalar n, Scalar k) {
+    Scalar i = 0;
+    Scalar j = 1;
+    while (k != 0) {
+        const auto q = n / k;
+        const auto new_k = n % k;
+        n = k;
+        k = new_k;
+        const auto new_i = j;
+        j = i - q * j;
+        i = new_i;
+    }
+    if (n == 1) return i;
+    return 0;
 }
 
 PROFILE Scalar gcd(const Number &number_n, const Number &number_k) {
@@ -201,8 +216,6 @@ PROFILE void prepareNumbers(Scalar N) {
     toCountWithMultiples.insert(1);
 }
 
-void computeOrders(Number &number);
-
 PROFILE void computeCoprimes(Number &number) {
     if (!number.coprimes.empty()) {
         return;
@@ -238,9 +251,9 @@ PROFILE void computeCoprimes(Number &number) {
         auto &number_n_p_k = numberCache[n_p_k];
         auto &number_p_k = numberCache[p_k];
         computeCoprimes(number_n_p_k);
-        computeOrders(number_p_k);//TODO
+        computeCoprimes(number_p_k);
         // l * n_p_k + a = e * n_p_k (mod p_k)
-        const auto r = number_p_k.inverses[n_p_k % p_k];//TODO: jediny usage inverzov
+        const auto r = inverse(p_k, n_p_k % p_k);
         for (const auto a: number_n_p_k.coprimes) {
             const auto b = (n - a * r) % p_k;
             for (const auto e: number_p_k.coprimes) {
@@ -268,10 +281,6 @@ PROFILE void computeOrders(Number &number) {
     }
     number.orders.resize(n, 0);
     number.orders[1] = 1;
-    if (isPowerOfPrime(number)) {
-        number.inverses.resize(n, 0);
-        number.inverses[1] = 1;
-    }
     number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
     number.powerSums[1] = 1;
     std::vector<Scalar> powers; //TODO: global
@@ -284,7 +293,7 @@ PROFILE void computeOrders(Number &number) {
         DoubleScalar power = 1;
         do {
             powers.push_back(power);
-            power = (power * c) % n;//TODO: pre vsetky delitele potom zratat, a inverse je phi - 1
+            power = (power * c) % n;//TODO: pre vsetky delitele potom zratat
         } while (power != 1); //TODO: number.orders[power] == 0
         const Scalar order = powers.size() * number.orders[power];//TODO: power == 1
         const auto &orderNumber = numberCache[order];
@@ -302,11 +311,6 @@ PROFILE void computeOrders(Number &number) {
                 const auto e = powers[div];
                 number.orders[e] = o;
                 number.powerSums[e] = powerSum;
-            }
-        }
-        if (isPowerOfPrime(number) && powers.size() == number.coprimes.size()) {
-            for (std::size_t i = 1; i < powers.size(); ++i) {
-                number.inverses[powers[i]] = powers[powers.size() - i];
             }
         }
     }
@@ -490,7 +494,6 @@ void clear(Number &number) {
     if (!number.coprimes.empty()) {//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.orders = std::vector<Scalar>{};
         number.coprimes = std::vector<Scalar>{};
-        number.inverses = std::vector<Scalar>{};
         number.powerSums = std::vector<Scalar>{};
         toCountWithMultiples.erase(number.n);
     }
