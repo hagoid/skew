@@ -344,21 +344,18 @@ Scalar isAB(const Number &number) {
     return 0;
 }
 
-PROFILE Scalar scitaj(Scalar d, Scalar e, const Number &number_r, Scalar rH, Scalar power_sum, Scalar n_h) {
-    return (((number_r.powerSums[e] - d) / rH + n_h) * static_cast<DoubleScalar>(power_sum) + d) % n_h;
+PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, Scalar power_sum, Scalar n_h) {
+    return (((power_sum_e - d) / rH + n_h) * static_cast<DoubleScalar>(power_sum) + d) % n_h;//TODO: optimize
 }
 
-PROFILE Scalar countCoprimeSolutions(Scalar a, const Number &number_n_h, Scalar gcd_b) {//TODO: priamo cez rozklad
+PROFILE Scalar countCoprimeSolutions(Scalar a_b, const Number &number_n_b, const Number &number_gcd_nh_b) {//TODO: priamo cez rozklad
     // ax = b (%n_h)
-    const auto gcd_a = gcd(number_n_h, numberCache[a]);
-    if (gcd_b != gcd_a) {
+    if (number_n_b.orders[a_b] == 0) {
         return 0;
     }
-    auto &number = numberCache[number_n_h.n / gcd_a];
-    const auto &number_ga = numberCache[gcd_a];
-    const auto gaa = gcd(number, number_ga);
-    const auto &number_gaa = numberCache[gaa];
-    return gaa * number_ga.phi / number_gaa.phi;
+    const auto gcd_nh_b_b = gcd(number_n_b, number_gcd_nh_b);
+    const auto &number_gcd_nh_b_b = numberCache[gcd_nh_b_b];
+    return gcd_nh_b_b * number_gcd_nh_b.phi / number_gcd_nh_b_b.phi;//TODO: can be precompted
 }
 
 PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
@@ -414,7 +411,8 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 if (power_sum_b % gcd_nh_b == 0) {//TODO: gcd ratame o riadok nizsie
                     continue;
                 }
-                const auto g_p = gcd(numberCache[power_sum_b], numberCache[gcd_nh_b]);
+                const auto &number_gcd_nh_b = numberCache[gcd_nh_b];
+                const auto g_p = gcd(numberCache[power_sum_b], number_gcd_nh_b);
                 const auto g_r = gcd_nh_b / g_p;
                 if (g_r < d) {
                     continue;
@@ -429,8 +427,13 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                     if (number_r.orders[e] != d) {
                         continue;
                     }
-                    const auto big_vysledok = scitaj(d, e, number_r, rH, power_sum, n_h);
-                    nskew += countCoprimeSolutions(big_vysledok, numberCache[n_h], gcd_nh_b);
+                    const auto power_sum_e = number_r.powerSums[e];
+                    if (power_sum_e % gcd_nh_b != 0) {
+                        continue;
+                    }
+                    const auto a = compute_a(d, power_sum_e, rH, power_sum, n_h);
+                    const auto a_b = a / gcd_nh_b;
+                    nskew += countCoprimeSolutions(a_b, number_n_b, number_gcd_nh_b);
                 }
             }
         }
