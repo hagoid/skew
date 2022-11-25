@@ -72,7 +72,7 @@ PROFILE Scalar gcd(const Number &number_n, const Number &number_k) {
     if (number_k.n == 0) {
         return number_n.n;
     }
-    std::size_t ni = 0;
+    std::size_t ni = 0;//TODO: iterators?
     std::size_t ki = 0;
     const auto &n_primes = number_n.primes;
     const auto &k_primes = number_k.primes;
@@ -95,6 +95,30 @@ PROFILE Scalar gcd(const Number &number_n, const Number &number_k) {
         }
     }
     return result;
+}
+
+PROFILE bool isCoprime(const Number &number_n, const Number &number_k) {
+    if (number_k.n == 0) {//TODO: dava to zmysel?
+        return false;
+    }
+    const auto &n_primes = number_n.primes;
+    const auto &k_primes = number_k.primes;
+    auto ni = n_primes.begin();
+    auto ki = k_primes.begin();
+    const auto n_end = n_primes.end();
+    const auto k_end = k_primes.end();
+    while (ni != n_end && ki != k_end) {
+        const auto n_prime = *ni;
+        const auto k_prime = *ki;
+        if (n_prime < k_prime) {
+            ++ni;
+        } else if (n_prime > k_prime) {
+            ++ki;
+        } else {
+            return false;
+        }
+    }
+    return true;
 }
 
 Scalar powerOfTwo(Scalar n) {
@@ -335,7 +359,7 @@ Scalar isAB(const Number &number) {
         if (a.n > b.n) {
             break;
         }
-        if (gcd(a, b) == 1 && gcd(a, numberCache[b.phi]) == 1 && gcd(b, numberCache[a.phi]) == 1) {//TODO: is coprime
+        if (isCoprime(a, b) && isCoprime(a, numberCache[b.phi]) && isCoprime(b, numberCache[a.phi])) {
             countSkewmorphisms(a);
             countSkewmorphisms(b);
             return a.nskew * b.nskew;
@@ -348,9 +372,9 @@ PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, Scalar power_s
     return (((power_sum_e - d) / rH + n_h) * static_cast<DoubleScalar>(power_sum) + d) % n_h;//TODO: optimize
 }
 
-PROFILE Scalar countCoprimeSolutions(Scalar a_b, const Number &number_n_b, const Number &number_gcd_nh_b) {//TODO: priamo cez rozklad
+PROFILE Scalar countCoprimeSolutions(const Number &number_a_b, const Number &number_n_b, const Number &number_gcd_nh_b) {//TODO: priamo cez rozklad
     // ax = b (%n_h)
-    if (number_n_b.orders[a_b] == 0) {
+    if (!isCoprime(number_n_b, number_a_b)) {
         return 0;
     }
     const auto gcd_nh_b_b = gcd(number_n_b, number_gcd_nh_b);
@@ -388,7 +412,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
             continue;
         }
         auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
-        computeOrders(number_n_b);//TODO: coprimes?
+        computeCoprimes(number_n_b);
         for (const auto coprime_b: number_n_b.coprimes) {
             const auto b = gcd_b * coprime_b;
             const auto s = b + 1;
@@ -432,8 +456,8 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                         continue;
                     }
                     const auto a = compute_a(d, power_sum_e, rH, power_sum, n_h);
-                    const auto a_b = a / gcd_nh_b;
-                    nskew += countCoprimeSolutions(a_b, number_n_b, number_gcd_nh_b);
+                    const auto &number_a_b = numberCache[a / gcd_nh_b];
+                    nskew += countCoprimeSolutions(number_a_b, number_n_b, number_gcd_nh_b);
                 }
             }
         }
