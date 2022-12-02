@@ -18,10 +18,8 @@ using DoubleScalar = std::int64_t;
 struct Number {//TODO: Cn
     std::vector<Scalar> primes;
     std::vector<Scalar> powersOfPrimes;
-    std::vector<Scalar> orders;// TODO: s v deliteli n
     std::vector<Scalar> divisors;
-    std::vector<Scalar> coprimes;//TODO: vector vectorov
-    std::vector<Scalar> powerSums;
+    std::vector<Scalar> coprimes;
     Scalar n;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
@@ -289,57 +287,6 @@ PROFILE void computeCoprimes(Number &number) {
     }
 }
 
-PROFILE void computeOrders(Number &number) {
-    if (!number.orders.empty()) {
-        return;
-    }
-    const auto n = number.n;
-    if (n == 0) {
-        return;
-    }
-    computeCoprimes(number);
-    if (n == 1) {
-        number.orders = {1};
-        number.powerSums = {0};
-        return;
-    }
-    number.orders.resize(n, 0);
-    number.orders[1] = 1;
-    number.powerSums.resize(n, 0);//TODO: len pre s co dava zmysel
-    number.powerSums[1] = 1;
-    std::vector<Scalar> powers; //TODO: global
-    powers.reserve(number.lambda);
-    for (const auto c: number.coprimes) {
-        if (number.orders[c] != 0) {
-            continue;
-        }
-        powers.clear();
-        DoubleScalar power = 1;
-        do {
-            powers.push_back(power);
-            power = (power * c) % n;//TODO: pre vsetky delitele potom zratat
-        } while (power != 1); //TODO: number.orders[power] == 0
-        const Scalar order = powers.size() * number.orders[power];//TODO: power == 1
-        const auto &orderNumber = numberCache[order];
-        for (const auto o: orderNumber.divisors) {
-            const auto divisor = order / o;
-            auto &oNumber = numberCache[o];
-            computeCoprimes(oNumber);
-            DoubleScalar powerSum = 0;
-            for (Scalar i = 0; i < order; i += divisor) {
-                powerSum = powerSum + powers[i];//TODO: reuse powerSum suborbity
-            }
-            powerSum = powerSum % n;
-            for (const auto cop: oNumber.coprimes) {
-                const auto div = cop * divisor;//TODO: rename
-                const auto e = powers[div];
-                number.orders[e] = o;
-                number.powerSums[e] = powerSum;
-            }
-        }
-    }
-}
-
 Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
     if (number.squareFree && number.powerOfTwo <= 2 && number.primes.size() == 2) {
         return (number.primes[0] - 1) * (number.primes[1] - 1);
@@ -384,6 +331,9 @@ PROFILE Scalar countCoprimeSolutions(const Number &number_a_b, const Number &num
 
 PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     Scalar nskew = 0;
+    std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
+    std::vector<Scalar> powers;//TODO: global
+    powers.reserve(number_n_div_d.n);
     for (const auto n_h : number_n_div_d.divisors) {
         if (n_h < d) {//TODO: range from second / except last / skip based on predicate
             continue;
@@ -392,11 +342,40 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
         if (number_n_h.lambda % d != 0) {
             continue;
         }
-        computeOrders(number_n_h);
         for (auto e = 2; e < n_h; ++e) {
-            if (number_n_h.orders[e] == d && number_n_h.powerSums[e] == 0) {//TODO: toto je po castiach rovnake
-                nskew += number_n_h.phi;
+            if (visited_e[e]) {
+                continue;
             }
+            if (!isCoprime(number_n_h, numberCache[e])) {
+                continue;
+            }
+            DoubleScalar power_e = e;
+            DoubleScalar power_sum_e = 1;
+            powers.push_back(1);
+            while (power_e != 1) {//TODO: until visited, power sum reuse?
+                powers.push_back(power_e);
+                power_e = (power_e * e) % number_n_h.n;//TODO: alias n_h, n_div_d
+            }
+            const Scalar order = powers.size();
+            if (order % d == 0) {
+                const auto step = order / d;
+                if (!visited_e[powers[step]]) {
+                    for (auto i = step; i < order; i += step) {
+                        power_sum_e += powers[i];
+                    }
+                    power_sum_e = power_sum_e % number_n_h.n;
+                    if (power_sum_e == 0) {
+                        nskew += numberCache[d].phi * number_n_h.phi;
+                    }
+                }
+            }
+            for (const auto power: powers) {
+                visited_e[power] = true;
+            }
+            powers.clear();
+        }
+        for (auto e = 2; e < n_h; ++e) {
+            visited_e[e] = false;
         }
     }
     return nskew;
@@ -414,6 +393,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
         auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
         computeCoprimes(number_n_b);
         std::vector<bool> visited_s(number_n_div_d.n, false);//TODO: global
+        std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
         std::vector<Scalar> powers;//TODO: global
         powers.reserve(number_n_div_d.n);
         for (const auto coprime_b: number_n_b.coprimes) {
@@ -466,18 +446,43 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 if (number_r.lambda % d != 0) {
                     continue;
                 }
-                computeOrders(number_r);//TODO: inplace
                 for (auto e = rH + 1; e < r; e += rH) {
-                    if (number_r.orders[e] != d) {
+                    if (visited_e[e]) {
                         continue;
                     }
-                    const auto power_sum_e = number_r.powerSums[e];
-                    if (power_sum_e % gcd_nh_b != 0) {
+                    if (!isCoprime(number_r, numberCache[e])) {
                         continue;
                     }
-                    const auto a = compute_a(d, power_sum_e, rH, power_sum, n_h);
-                    const auto &number_a_b = numberCache[a / gcd_nh_b];
-                    nskew += number_rH.phi * countCoprimeSolutions(number_a_b, number_n_b, number_gcd_nh_b);
+                    DoubleScalar power_e = e;
+                    DoubleScalar power_sum_e = 1;
+                    powers.push_back(1);
+                    while (power_e != 1) {//TODO: until visited, power sum reuse?
+                        powers.push_back(power_e);
+                        power_e = (power_e * e) % number_r.n;//TODO: alias n_h, n_div_d
+                    }
+                    const Scalar order = powers.size();
+                    if (order % d == 0) {
+                        const auto step = order / d;
+                        if (!visited_e[powers[step]]) {
+                            for (auto i = step; i < order; i += step) {
+                                power_sum_e += powers[i];
+                            }
+                            power_sum_e = power_sum_e % number_r.n;
+
+                            if (power_sum_e % gcd_nh_b == 0) {
+                                const auto a = compute_a(d, power_sum_e, rH, power_sum, n_h);
+                                const auto &number_a_b = numberCache[a / gcd_nh_b];
+                                nskew += numberCache[d].phi * number_rH.phi * countCoprimeSolutions(number_a_b, number_n_b, number_gcd_nh_b);
+                            }
+                        }
+                    }
+                    for (const auto power: powers) {
+                        visited_e[power] = true;
+                    }
+                    powers.clear();
+                }
+                for (auto e = rH + 1; e < r; e += rH) {
+                    visited_e[e] = false;
                 }
             }
         }
@@ -538,9 +543,7 @@ void fprint(const Number &number, std::ostream& stream) {
 
 void clear(Number &number) {
     if (!number.coprimes.empty()) {//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
-        number.orders = std::vector<Scalar>{};
         number.coprimes = std::vector<Scalar>{};
-        number.powerSums = std::vector<Scalar>{};
         toCountWithMultiples.erase(number.n);
     }
 }
