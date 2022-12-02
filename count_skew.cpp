@@ -368,8 +368,8 @@ Scalar isAB(const Number &number) {
     return 0;
 }
 
-PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, Scalar power_sum, Scalar n_h) {
-    return (((power_sum_e - d) / rH + n_h) * static_cast<DoubleScalar>(power_sum) + d) % n_h;//TODO: optimize
+PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar power_sum, Scalar n_h) {
+    return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
 }
 
 PROFILE Scalar countCoprimeSolutions(const Number &number_a_b, const Number &number_n_b, const Number &number_gcd_nh_b) {//TODO: priamo cez rozklad
@@ -413,14 +413,34 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
         }
         auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
         computeCoprimes(number_n_b);
+        std::vector<bool> visited_s(number_n_div_d.n, false);//TODO: global
+        std::vector<Scalar> powers;//TODO: global
+        powers.reserve(number_n_div_d.n);
         for (const auto coprime_b: number_n_b.coprimes) {
             const auto b = gcd_b * coprime_b;
             const auto s = b + 1;
-            const auto rH = number_n_div_d.orders[s];//TODO: sorted by order?
-            if (rH == 0) {
+            if (visited_s[s]) {
                 continue;
             }
-            const auto power_sum = number_n_div_d.powerSums[s];
+            if (!isCoprime(number_n_div_d, numberCache[s])) {
+                continue;
+            }
+            DoubleScalar power_s = s;
+            DoubleScalar power_sum = 1;
+            powers.push_back(1);
+            while (power_s != 1) {
+                power_sum += power_s;
+                powers.push_back(power_s);
+                power_s = (power_s * s) % number_n_div_d.n;
+            }
+            const Scalar rH = powers.size();
+            auto &number_rH = numberCache[rH];
+            computeCoprimes(number_rH);
+            for (const auto coprime_rH: number_rH.coprimes) {
+                visited_s[powers[coprime_rH]] = true;
+            }
+            powers.clear();
+            power_sum = power_sum % number_n_div_d.n;//TODO: treba toto modulovat? alias n_div_d
             const auto power_sum_b = power_sum / number_n_b.n;
             const auto min_r = d * rH;//TODO: better estimate?
             const auto &number_gcd_b = numberCache[gcd_b];
@@ -457,7 +477,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                     }
                     const auto a = compute_a(d, power_sum_e, rH, power_sum, n_h);
                     const auto &number_a_b = numberCache[a / gcd_nh_b];
-                    nskew += countCoprimeSolutions(number_a_b, number_n_b, number_gcd_nh_b);
+                    nskew += number_rH.phi * countCoprimeSolutions(number_a_b, number_n_b, number_gcd_nh_b);
                 }
             }
         }
@@ -487,7 +507,6 @@ PROFILE void countSkewmorphisms(Number &number) {
                 }
                 const auto n_div_d = n / d;
                 auto &number_n_div_d = numberCache[n_div_d];
-                computeOrders(number_n_div_d);//TODO: necessary?
 
                 nskew += sEquals1(d, number_n_div_d);
                 nskew += sOtherThan1(d, number_n_div_d);
