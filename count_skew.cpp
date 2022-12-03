@@ -217,8 +217,6 @@ PROFILE void computePhi(Number &number) {
     }
 }
 
-std::set<int> toCountWithMultiples = {};//TODO
-
 PROFILE void prepareNumbers(Scalar N) {
     numberCache.resize(N + 1);
     std::vector<Scalar> primes;
@@ -231,11 +229,9 @@ PROFILE void prepareNumbers(Scalar N) {
             if (i * DoubleScalar(i) <= N) {
                 primes.push_back(i);
             }
-            toCountWithMultiples.insert(i);
         }
         computePhi(number);//TODO: lazy ak chceme pouzivat A, B
     }
-    toCountWithMultiples.insert(1);
 }
 
 void clear(Number &number);
@@ -254,7 +250,6 @@ PROFILE void computeCoprimes(Number &number) {
         number.coprimes.push_back(0);
         return;
     }
-    toCountWithMultiples.insert(number.n);
     const auto p = getMaxPrime(number);
     if (n == p) {
         for (Scalar e = 1; e < n; ++e) {//TODO: spojit s p^k
@@ -553,7 +548,6 @@ void fprint(const Number &number, std::ostream& stream) {
 void clear(Number &number) {
     if (!number.coprimes.empty()) {//TODO: neratame nieco viackrat? jasne, ze hej, mozme si predratat reference counter?
         number.coprimes = std::vector<Scalar>{};
-        toCountWithMultiples.erase(number.n);
     }
 }
 
@@ -569,30 +563,12 @@ int main(int argc, char *argv[]) {
 
     prepareNumbers(N);
 
-    while (!toCountWithMultiples.empty()) {
-        const auto p = *toCountWithMultiples.rbegin();
-        const auto lowerMultiplier = (A + p - 1) / p;
-        const auto upperMultiplier = N / p;
-        for (auto multiplier = upperMultiplier; multiplier >= lowerMultiplier; --multiplier) {
-            const auto n = multiplier * p;
-
-            auto &number = numberCache[n];
-            if (number.powerOfTwo <= 16 && number.squareFree) {
-                countSkewmorphisms(number);
-//                fprint(number, std::cerr);
-            }
-
-            clear(number);
-        }
-//        for (auto multiplier = 1; multiplier < lowerMultiplier; ++multiplier) {
-//            const auto n = multiplier * p;
-//            auto &number = numberCache[n];
-//            clear(number);
-//        }
-        toCountWithMultiples.erase(p);
-    }
     for (auto n = A; n <= N; ++n) {
-        const auto &number = numberCache[n];
+        auto &number = numberCache[n];
+        if (number.powerOfTwo <= 16 && number.squareFree) {
+            countSkewmorphisms(number);
+//            fprint(number, std::cerr);
+        }
         if (number.nskew != 0) {
             print(number);
         }
