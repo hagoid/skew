@@ -238,6 +238,8 @@ PROFILE void prepareNumbers(Scalar N) {
     toCountWithMultiples.insert(1);
 }
 
+void clear(Number &number);
+
 PROFILE void computeCoprimes(Number &number) {
     if (!number.coprimes.empty()) {
         return;
@@ -267,6 +269,7 @@ PROFILE void computeCoprimes(Number &number) {
                 number.coprimes.push_back(m + e);
             }
         }
+        clear(number_p);
     } else {
         const auto p_k = number.powersOfPrimes.back();
         const auto n_p_k = n / p_k;
@@ -284,6 +287,8 @@ PROFILE void computeCoprimes(Number &number) {
                 number.coprimes.push_back(l * n_p_k + a);
             }
         }
+        clear(number_n_p_k);
+        clear(number_p_k);
     }
 }
 
@@ -419,6 +424,9 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
             for (const auto coprime_rH: number_rH.coprimes) {
                 visited_s[powers[coprime_rH]] = true;
             }
+            if (number_rH.n != number_n_b.n) {
+                clear(number_rH);
+            }
             powers.clear();
             power_sum = power_sum % number_n_div_d.n;//TODO: treba toto modulovat? alias n_div_d
             const auto power_sum_b = power_sum / number_n_b.n;
@@ -486,6 +494,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 }
             }
         }
+        clear(number_n_b);
     }
     return nskew;
 }
