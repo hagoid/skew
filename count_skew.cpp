@@ -287,34 +287,6 @@ PROFILE void computeCoprimes(Number &number) {
     }
 }
 
-Scalar isPQ(const Number &number) {//TODO: Scalar -> int, aj isAB
-    if (number.squareFree && number.powerOfTwo <= 2 && number.primes.size() == 2) {
-        return (number.primes[0] - 1) * (number.primes[1] - 1);
-    }
-    return 0;
-}
-
-void countSkewmorphisms(Number &number);
-
-Scalar isAB(const Number &number) {
-    for (const auto divisor: number.divisors) {
-        auto &a = numberCache[divisor];
-        auto &b = numberCache[number.n / a.n];
-        if (a.n == 1) {
-            continue;
-        }
-        if (a.n > b.n) {
-            break;
-        }
-        if (isCoprime(a, b) && isCoprime(a, numberCache[b.phi]) && isCoprime(b, numberCache[a.phi])) {
-            countSkewmorphisms(a);
-            countSkewmorphisms(b);
-            return a.nskew * b.nskew;
-        }
-    }
-    return 0;
-}
-
 PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar power_sum, Scalar n_h) {
     return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
 }
@@ -503,23 +475,17 @@ PROFILE void countSkewmorphisms(Number &number) {
     auto nskew = phi;
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
-        if (const auto p_1_q_1 = isPQ(number)) {
-            nskew += p_1_q_1;
-        } else if (const auto a_b = isAB(number)) {
-            nskew = a_b;
-        } else {
-            const auto maxPrime = getMaxPrime(number);
-            const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
-            for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
-                if (d == 1) {
-                    continue;
-                }
-                const auto n_div_d = n / d;
-                auto &number_n_div_d = numberCache[n_div_d];
-
-                nskew += sEquals1(d, number_n_div_d);
-                nskew += sOtherThan1(d, number_n_div_d);
+        const auto maxPrime = getMaxPrime(number);
+        const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
+        for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
+            if (d == 1) {
+                continue;
             }
+            const auto n_div_d = n / d;
+            auto &number_n_div_d = numberCache[n_div_d];
+
+            nskew += sEquals1(d, number_n_div_d);
+            nskew += sOtherThan1(d, number_n_div_d);
         }
     }
     number.nskew = nskew;
