@@ -779,24 +779,18 @@ PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& fu
     return good;
 }
 
-PROFILE void computePiFromRo(const Orbit &orbit1_ro, SkewMorphism &phi) {
-    for (Scalar j = 0; j < orbit1_ro.size(); ++j) {
-        phi.pi.push_back(orbit1_ro[j]);
-    }
-}
-
-PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &psi, const Orbit &t, const SkewMorphism &phi) {//TODO: inputs p, phi...
-    const auto n = phi.n;
-    Function increment = Function(phi.d);
-    for (Scalar i = 0; i < phi.d; ++i) {
-        const auto pi = phi.pi[i];
-        const auto pi_mod_p = pi % p;//TODO: ro mod, div
-        const auto pi_div_p = pi / p;
+PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &psi, const Orbit &t, const Function &pi) {//TODO: inputs p, phi...
+    const auto n = psi.n;
+    Function increment = Function(pi.size());
+    for (Scalar i = 0; i < pi.size(); ++i) {
+        const auto pi_ = pi[i];
+        const auto pi_mod_p = pi_ % p;//TODO: ro mod, div
+        const auto pi_div_p = pi_ / p;
         increment[i] = apply2(psi, pi_div_p, t[pi_mod_p]);
     }
     Function function = Function(n, 0);
-    for (Scalar i1 = 0; i1 < n; i1 += phi.d) {
-        for (Scalar i2 = 1; i2 <= phi.d; ++i2) {
+    for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
+        for (std::size_t i2 = 1; i2 <= pi.size(); ++i2) {
             const auto i = i1 + i2;
             if (i >= n) {
                 return function;
@@ -1032,13 +1026,12 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
                     SkewMorphism phi;
                     phi.n = n;
-                    phi.pi.reserve(ro.r);
                     phi.d = ro.r;
                     phi.h = t[1] - 1;
                     phi.r = m;
                     phi.permutation.places.resize(n);
-                    computePiFromRo(orbit1_ro, phi);
-                    Function function = computeFunctionFromPsiPi(p, psi, t, phi);
+                    const Function &pi = orbit1_ro;
+                    Function function = computeFunctionFromPsiPi(p, psi, t, pi);
                     if (!isPermutation(function)) {
                         continue;
                     }
@@ -1052,7 +1045,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     if (!checkFirstPMod(ro, orbit1)) {
                         continue;
                     }
-                    Function function2 = computeFunction(n, orbit1_ro, orbit1);
+                    Function function2 = computeFunction(n, pi, orbit1);
                     if (!compareFunctions(function, function2)) {
                         continue;
                     }
@@ -1060,6 +1053,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         continue;
                     }
                     computeOrbits(phi, function);
+                    phi.pi = pi;
                     if (!isSkewMorphism(phi, function)) {
                         continue;
                     }
