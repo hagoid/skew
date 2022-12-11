@@ -36,7 +36,6 @@ struct Permutation {
 
 struct SkewMorphism {
     Permutation permutation;
-//    Function function;
     Function pi;
     std::map<Index, Scalar> free_x;//TODO: vector
     Scalar n = 0;
@@ -69,7 +68,7 @@ PROFILE Scalar apply(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {
     return orbit[(place.indexOnOrbit + n) % Scalar(orbit.size())];
 }
 
-PROFILE Scalar apply2(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {
+PROFILE Scalar apply2(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {//TODO: rename
     const auto &place = skewMorphism.permutation.places[a];
     if (place.orbitIndex == -1) {
         return a;
@@ -93,28 +92,22 @@ PROFILE Scalar apply1(const SkewMorphism &skewMorphism, Scalar a) {
     return orbit[indexOnOrbit];
 }
 
-PROFILE void finish(SkewMorphism &skewMorphism, Scalar n) {
+Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1);//TODO
+
+PROFILE void finish(SkewMorphism &skewMorphism) {//TODO: zjednotit, auto, coset pre s1 sother, other
+    const auto n = skewMorphism.n;
     const auto &orbits = skewMorphism.permutation.orbits;
     const auto &orbit1 = orbits.empty() ? Orbit{2, 1} : orbits[0];
-    Function function = Function(n, 0);
-    Scalar oldO = 1;
+    const Function function = computeFunction(n, skewMorphism.pi, orbit1);
     skewMorphism.permutation.places.resize(n);
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
         skewMorphism.permutation.places[o].orbitIndex = 0;
         skewMorphism.permutation.places[o].indexOnOrbit = i;
-        function[oldO] = o;
-        oldO = o;
+
     }
-    function[oldO] = 1;
     skewMorphism.permutation.places[1].orbitIndex = orbits.empty() ? -1 : 0;
     skewMorphism.permutation.places[1].indexOnOrbit = orbits.empty() ? 1 : 0;
-    for (Scalar i = 2; i < n; ++i) {
-        if (function[i] != 0) {
-            continue;
-        }
-        function[i] = (function[i - 1] + orbit1[skewMorphism.pi[i - 1]]) % n;
-    }
     for (Scalar i = 0; i < n; ++i) {
         auto &orbitPlace = skewMorphism.permutation.places[i];
         if (orbitPlace.orbitIndex != -1) {
@@ -485,13 +478,10 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d, std::vecto
                                 skew.d = d;
                                 skew.h = orbit[1] - 1;
                                 skew.r = n_h;
-//                                skew.function = {0, orbit[1]};
-                                for (Scalar i = 0; i < number_n_div_d.n; ++i) {
-                                    for (Scalar id = 0; id < d; ++id) {
-                                        skew.pi.push_back(powers[apply1(automorphism, id) * step]);
-                                    }
+                                for (Scalar id = 0; id < d; ++id) {
+                                    skew.pi.push_back(powers[apply1(automorphism, id) * step]);
                                 }
-                                finish(skew, n);
+                                finish(skew);
                                 skews.emplace_back(std::move(skew));
                             }
                         }
@@ -645,13 +635,10 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, std::ve
                                                 skew.d = d;
                                                 skew.h = orbit[1] - 1;
                                                 skew.r = r;
-//                                                skew.function = {0, orbit[1]};
-                                                for (Scalar i = 0; i < number_n_div_d.n; ++i) {
-                                                    for (Scalar id = 0; id < d; ++id) {
-                                                        skew.pi.push_back(powers_e[apply1(automorphism_e, id) * step]);
-                                                    }
+                                                for (Scalar id = 0; id < d; ++id) {
+                                                    skew.pi.push_back(powers_e[apply1(automorphism_e, id) * step]);
                                                 }
-                                                finish(skew, n);
+                                                finish(skew);
                                                 skews.emplace_back(std::move(skew));
                                                 ++increment2;
                                             }
@@ -689,11 +676,9 @@ PROFILE Scalar computeAutomorphisms(Number &number) {
         automorphism.n = n;
         automorphism.d = 1;
         automorphism.h = coprime - 1;
-        automorphism.pi.resize(n, 1);
-//        automorphism.function.resize(n, 0);
+        automorphism.pi.resize(1, 1);
         automorphism.permutation.places.resize(n);
         for (Scalar i = 0; i < n; ++i) {
-//            automorphism.function[i] = (i * coprime) % n;
             auto &orbitPlace = automorphism.permutation.places[i];
             if (orbitPlace.orbitIndex != -1) {
                 continue;
@@ -725,7 +710,7 @@ PROFILE Scalar computeAutomorphisms(Number &number) {
 
 std::string to_string(const SkewMorphism &skewMorphism) {
     std::string result;
-    result.reserve(skewMorphism.pi.size() * 7);
+    result.reserve(skewMorphism.n * 7);
     for (const auto &orbit: skewMorphism.permutation.orbits) {
         result += "(";
         bool first = true;
@@ -795,10 +780,8 @@ PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& fu
 }
 
 PROFILE void computePiFromRo(const Orbit &orbit1_ro, SkewMorphism &phi) {
-    for (Scalar i = 0; i < phi.n; i += orbit1_ro.size()) {//TODO: neduplikovat
-        for (Scalar j = 0; j < orbit1_ro.size(); ++j) {
-            phi.pi.push_back(orbit1_ro[j]);
-        }
+    for (Scalar j = 0; j < orbit1_ro.size(); ++j) {
+        phi.pi.push_back(orbit1_ro[j]);
     }
 }
 
@@ -821,7 +804,7 @@ PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &ps
             if (function[i] != 0) {//TODO: musia sa rovnat
                 continue;
             }
-            function[i] = function[i - 1] + increment[i2 - 1];
+            function[i] = function[i - 1] + increment[i2 - 1];//TODO: zjednotit s computeFunction
             if (function[i] >= n) function[i] -= n;
         }
     }
@@ -897,8 +880,7 @@ PROFILE void computeOrbit1(SkewMorphism &skewMorphism, const Function &function)
     } while (c != i);
 }
 
-PROFILE Function computeFunction(const SkewMorphism &skewMorphism, const Orbit &orbit1) {//TODO: inputs
-    const auto n = skewMorphism.n;
+PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1) {//TODO: inputs
     Function function(n, 0);
     Scalar oldO = 1;
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
@@ -907,12 +889,19 @@ PROFILE Function computeFunction(const SkewMorphism &skewMorphism, const Orbit &
         oldO = o;
     }
     function[oldO] = 1;
-    for (Scalar i = 2; i < n; ++i) {
-        if (function[i] != 0) {
-            continue;
+
+    for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
+        for (std::size_t i2 = 1; i2 <= pi.size(); ++i2) {
+            const auto i = i1 + i2;
+            if (i >= n) {
+                return function;
+            }
+            if (function[i] != 0) {//TODO: musia sa rovnat
+                continue;
+            }
+            function[i] = function[i - 1] + orbit1[pi[i2 - 1]];
+            if (function[i] >= n) function[i] -= n;
         }
-        function[i] = function[i - 1] + orbit1[skewMorphism.pi[i - 1]];
-        if (function[i] >= n) function[i] -= n;
     }
     return function;
 }
@@ -1043,7 +1032,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
                     SkewMorphism phi;
                     phi.n = n;
-                    phi.pi.reserve(n);
+                    phi.pi.reserve(ro.r);
                     phi.d = ro.r;
                     phi.h = t[1] - 1;
                     phi.r = m;
@@ -1063,7 +1052,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     if (!checkFirstPMod(ro, orbit1)) {
                         continue;
                     }
-                    Function function2 = computeFunction(phi, orbit1);
+                    Function function2 = computeFunction(n, orbit1_ro, orbit1);
                     if (!compareFunctions(function, function2)) {
                         continue;
                     }
