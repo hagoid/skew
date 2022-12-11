@@ -5,6 +5,9 @@
 #include <ostream>
 #include <set>
 #include <vector>
+#include <map>
+#include <sstream>
+#include <unordered_set>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -14,17 +17,150 @@
 
 using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;
+using Index = Scalar;
+
+using Orbit = std::vector<Scalar>;
+using Orbits = std::vector<Orbit>;
+using Function = std::vector<Scalar>;
+
+struct OrbitPlace {
+    Index orbitIndex = -1;
+    Index indexOnOrbit = 0;
+};
+using OrbitPlaces = std::vector<OrbitPlace>;
+
+struct Permutation {
+    Orbits orbits;
+    OrbitPlaces places;
+};
+
+struct SkewMorphism {
+    Permutation permutation;
+//    Function function;
+    Function pi;
+    std::map<Index, Scalar> free_x;//TODO: vector
+    Scalar n = 0;
+    Scalar d = 0;
+    Scalar h = 0;
+    Scalar r = 0;
+    Scalar max_orbits = 0;
+};
+
+PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {
+    const auto &orbits = skewMorphism.permutation.orbits;
+    if (orbits.empty()) {
+        skewMorphism.max_orbits = skewMorphism.permutation.places.size();
+        return;
+    }
+    skewMorphism.max_orbits = std::count_if(orbits.begin(), orbits.end(),
+                                            [r = skewMorphism.r](const auto &orbit) { return orbit.size() == r; });
+}
+
+PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
+    return skewMorphism.permutation.orbits[0];
+}
+
+PROFILE Scalar apply(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {
+    const auto &place = skewMorphism.permutation.places[a];
+    if (place.orbitIndex == -1) {
+        return a;
+    }
+    const auto &orbit = skewMorphism.permutation.orbits[place.orbitIndex];
+    return orbit[(place.indexOnOrbit + n) % Scalar(orbit.size())];
+}
+
+PROFILE Scalar apply2(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {
+    const auto &place = skewMorphism.permutation.places[a];
+    if (place.orbitIndex == -1) {
+        return a;
+    }
+    const auto &orbit = skewMorphism.permutation.orbits[place.orbitIndex];
+    auto indexOnOrbit = place.indexOnOrbit + n;
+    const Scalar orbitSize = orbit.size();
+    if (indexOnOrbit >= orbitSize) indexOnOrbit -= orbitSize;
+    return orbit[indexOnOrbit];
+}
+
+PROFILE Scalar apply1(const SkewMorphism &skewMorphism, Scalar a) {
+    const auto &place = skewMorphism.permutation.places[a];
+    if (place.orbitIndex == -1) {
+        return a;
+    }
+    const auto &orbit = skewMorphism.permutation.orbits[place.orbitIndex];
+    auto indexOnOrbit = place.indexOnOrbit + 1;
+    const Scalar orbitSize = orbit.size();
+    if (indexOnOrbit >= orbitSize) indexOnOrbit -= orbitSize;
+    return orbit[indexOnOrbit];
+}
+
+PROFILE void finish(SkewMorphism &skewMorphism, Scalar n) {
+    const auto &orbits = skewMorphism.permutation.orbits;
+    const auto &orbit1 = orbits.empty() ? Orbit{2, 1} : orbits[0];
+    Function function = Function(n, 0);
+    Scalar oldO = 1;
+    skewMorphism.permutation.places.resize(n);
+    for (std::size_t i = 1; i < orbit1.size(); ++i) {
+        const auto o = orbit1[i];
+        skewMorphism.permutation.places[o].orbitIndex = 0;
+        skewMorphism.permutation.places[o].indexOnOrbit = i;
+        function[oldO] = o;
+        oldO = o;
+    }
+    function[oldO] = 1;
+    skewMorphism.permutation.places[1].orbitIndex = orbits.empty() ? -1 : 0;
+    skewMorphism.permutation.places[1].indexOnOrbit = orbits.empty() ? 1 : 0;
+    for (Scalar i = 2; i < n; ++i) {
+        if (function[i] != 0) {
+            continue;
+        }
+        function[i] = (function[i - 1] + orbit1[skewMorphism.pi[i - 1]]) % n;
+    }
+    for (Scalar i = 0; i < n; ++i) {
+        auto &orbitPlace = skewMorphism.permutation.places[i];
+        if (orbitPlace.orbitIndex != -1) {
+            continue;
+        }
+        Orbit orbit;
+        auto c = i;
+        do {
+            skewMorphism.permutation.places[c].orbitIndex = skewMorphism.permutation.orbits.size();
+            skewMorphism.permutation.places[c].indexOnOrbit = orbit.size();
+            orbit.push_back(c);
+            c = function[c];
+        } while (c != i);
+        if (orbit.size() > 1) {
+            skewMorphism.permutation.orbits.emplace_back(std::move(orbit));
+        } else {
+            skewMorphism.permutation.places[c].orbitIndex = -1;
+            skewMorphism.permutation.places[c].indexOnOrbit = i;
+        }
+        orbit.clear();
+    }
+    computeMaxOrbits(skewMorphism);
+    if (!orbits.empty()) {
+        for (std::size_t i = 1; i < orbit1.size(); ++i) {
+            const auto index = orbit1[i] % skewMorphism.d;
+            const auto modulo = skewMorphism.pi[index];
+            skewMorphism.free_x[index] = modulo;
+        }
+    }
+}
 
 struct Number {//TODO: Cn
     std::vector<Scalar> primes;
     std::vector<Scalar> powersOfPrimes;
     std::vector<Scalar> divisors;
     std::vector<Scalar> coprimes;
-    Scalar n;
+    std::vector<SkewMorphism> automorphisms;
+    std::vector<SkewMorphism> properCosetPreserving;
+    std::vector<SkewMorphism> properNonPreserving;
+    Scalar n = 0;
     Scalar powerOfTwo = 0;
     Scalar phi = 0;
     Scalar lambda = 0;
     Scalar nskew = 0;
+    Scalar nproper = 0;
+    Scalar npreserving = 0;
     bool squareFree = true;
 };
 
@@ -276,6 +412,7 @@ PROFILE void computeCoprimes(Number &number) {
         const auto r = inverse(p_k, n_p_k % p_k);
         for (const auto a: number_n_p_k.coprimes) {
             const auto b = (n - a * r) % p_k;
+            if (b < 0) throw "";
             for (const auto e: number_p_k.coprimes) {
                 auto l = e + b;
                 if (l >= p_k) l -= p_k;
@@ -291,17 +428,7 @@ PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar p
     return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
 }
 
-PROFILE Scalar countCoprimeSolutions(const Number &number_a_b, const Number &number_n_b, const Number &number_gcd_nh_b) {//TODO: priamo cez rozklad
-    // ax = b (%n_h)
-    if (!isCoprime(number_n_b, number_a_b)) {
-        return 0;
-    }
-    const auto gcd_nh_b_b = gcd(number_n_b, number_gcd_nh_b);
-    const auto &number_gcd_nh_b_b = numberCache[gcd_nh_b_b];
-    return gcd_nh_b_b * number_gcd_nh_b.phi / number_gcd_nh_b_b.phi;//TODO: can be precompted
-}
-
-PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
+PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d, std::vector<SkewMorphism> &skews) {
     Scalar nskew = 0;
     std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
     std::vector<Scalar> powers;//TODO: global
@@ -338,6 +465,37 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
                     power_sum_e = power_sum_e % number_n_h.n;
                     if (power_sum_e == 0) {
                         nskew += numberCache[d].phi * number_n_h.phi;
+                        SkewMorphism skew;
+                        std::vector<Scalar> orbit_d1;
+                        const auto n = d * number_n_div_d.n;
+                        const auto gcd_h = n / number_n_h.n;
+                        for (Scalar i = 0; i < n; i += gcd_h) {
+                            orbit_d1.push_back(i);
+                        }
+                        computeCoprimes(number_n_h);
+                        for (const auto coprime_h: number_n_h.coprimes) {
+                            Orbit orbit;
+                            std::transform(orbit_d1.begin(), orbit_d1.end(), std::back_inserter(orbit),
+                                           [coprime_h, n](const auto d_h) {
+                                               return (1 + d_h * coprime_h) % n;
+                                           });
+                            for (const auto &automorphism: numberCache[d].automorphisms) {
+                                skew.permutation.orbits.push_back(orbit);
+                                skew.n = n;
+                                skew.d = d;
+                                skew.h = orbit[1] - 1;
+                                skew.r = n_h;
+//                                skew.function = {0, orbit[1]};
+                                for (Scalar i = 0; i < number_n_div_d.n; ++i) {
+                                    for (Scalar id = 0; id < d; ++id) {
+                                        skew.pi.push_back(powers[apply1(automorphism, id) * step]);
+                                    }
+                                }
+                                finish(skew, n);
+                                skews.emplace_back(std::move(skew));
+                            }
+                        }
+                        clear(number_n_h);
                     }
                 }
             }
@@ -353,7 +511,7 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     return nskew;
 }
 
-PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
+PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, std::vector<SkewMorphism> &skews) {
     Scalar nskew = 0;
     for (const auto gcd_b: number_n_div_d.divisors) {
         if (gcd_b == number_n_div_d.n) {
@@ -366,9 +524,12 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
         computeCoprimes(number_n_b);
         std::vector<bool> visited_s(number_n_div_d.n, false);//TODO: global
         std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
-        std::vector<Scalar> powers;//TODO: global
-        powers.reserve(number_n_div_d.n);
-        for (const auto coprime_b: number_n_b.coprimes) {
+        std::vector<Scalar> powers_s;//TODO: global
+        std::vector<Scalar> powers_e;//TODO: global
+        powers_s.reserve(number_n_div_d.n);
+        powers_e.reserve(number_n_div_d.n);
+        const auto number_n_b_coprimes = std::move(number_n_b.coprimes);
+        for (const auto coprime_b: number_n_b_coprimes) {
             const auto b = gcd_b * coprime_b;
             const auto s = b + 1;
             if (visited_s[s]) {
@@ -379,22 +540,22 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
             }
             DoubleScalar power_s = s;
             DoubleScalar power_sum = 1;
-            powers.push_back(1);
+            powers_s.clear();
+            powers_s.push_back(1);
             while (power_s != 1) {
                 power_sum += power_s;
-                powers.push_back(power_s);
+                powers_s.push_back(power_s);
                 power_s = (power_s * s) % number_n_div_d.n;
             }
-            const Scalar rH = powers.size();
+            const Scalar rH = powers_s.size();
             auto &number_rH = numberCache[rH];
             computeCoprimes(number_rH);
             for (const auto coprime_rH: number_rH.coprimes) {
-                visited_s[powers[coprime_rH]] = true;
+                visited_s[powers_s[coprime_rH]] = true;
             }
             if (number_rH.n != number_n_b.n) {
                 clear(number_rH);
             }
-            powers.clear();
             power_sum = power_sum % number_n_div_d.n;//TODO: treba toto modulovat? alias n_div_d
             const auto power_sum_b = power_sum / number_n_b.n;
             const auto min_r = d * rH;//TODO: better estimate?
@@ -430,31 +591,84 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                     }
                     DoubleScalar power_e = e;
                     DoubleScalar power_sum_e = 1;
-                    powers.push_back(1);
+                    powers_e.push_back(1);
                     while (power_e != 1) {//TODO: until visited, power sum reuse?
-                        powers.push_back(power_e);
+                        powers_e.push_back(power_e);
                         power_e = (power_e * e) % number_r.n;//TODO: alias n_h, n_div_d
                     }
-                    const Scalar order = powers.size();
+                    const Scalar order = powers_e.size();
                     if (order % d == 0) {
                         const auto step = order / d;
-                        if (!visited_e[powers[step]]) {
+                        if (!visited_e[powers_e[step]]) {
                             for (auto i = step; i < order; i += step) {
-                                power_sum_e += powers[i];
+                                power_sum_e += powers_e[i];
                             }
                             power_sum_e = power_sum_e % number_r.n;
 
                             if (power_sum_e % gcd_nh_b == 0) {
                                 const auto a = compute_a(d, power_sum_e, rH, power_sum, n_h);
                                 const auto &number_a_b = numberCache[a / gcd_nh_b];
-                                nskew += numberCache[d].phi * number_rH.phi * countCoprimeSolutions(number_a_b, number_n_b, number_gcd_nh_b);
+                                if (isCoprime(number_n_b, number_a_b)) {
+                                    const auto gcd_nh_b_b = gcd(number_n_b, number_gcd_nh_b);
+                                    const auto &number_gcd_nh_b_b = numberCache[gcd_nh_b_b];
+                                    const auto increment = numberCache[d].phi * number_rH.phi * gcd_nh_b_b * number_gcd_nh_b.phi / number_gcd_nh_b_b.phi;//TODO: can be precompted;
+                                    nskew += increment;
+
+                                    auto increment2 = 0;
+                                    SkewMorphism skew;
+                                    const auto n = d * number_n_div_d.n;
+                                    auto &number_n_h = numberCache[n_h];
+                                    computeCoprimes(number_n_h);
+                                    const auto gcd_h = n / n_h;
+                                    for (const auto &automorphism_s: number_rH.automorphisms) {
+                                        std::vector<Scalar> orbit_d1;
+                                        Scalar sum = 0;
+                                        for (Scalar i = 0; i < g_r; ++i) {
+                                            for (Scalar is = 0; is < rH; ++is) {
+                                                orbit_d1.push_back(sum);
+                                                sum += gcd_h * powers_s[apply1(automorphism_s, is)];
+                                            }
+                                        }
+                                        const auto x = (inverse(number_n_b.n, number_a_b.n) * ((powers_s[apply1(automorphism_s, 1)] - 1) / gcd_b)) % number_n_b.n;
+                                        for (const auto coprime_h: number_n_h.coprimes) {
+                                            if ((coprime_h - x) % number_n_b.n != 0) {
+                                                continue;
+                                            }
+                                            Orbit orbit;
+                                            std::transform(orbit_d1.begin(), orbit_d1.end(), std::back_inserter(orbit),
+                                                           [coprime_h, n](const auto d_h) {
+                                                               return (1 + d_h * coprime_h) % n;
+                                                           });
+                                            for (const auto &automorphism_e: numberCache[d].automorphisms) {
+                                                skew.permutation.orbits.push_back(orbit);
+                                                skew.n = n;
+                                                skew.d = d;
+                                                skew.h = orbit[1] - 1;
+                                                skew.r = r;
+//                                                skew.function = {0, orbit[1]};
+                                                for (Scalar i = 0; i < number_n_div_d.n; ++i) {
+                                                    for (Scalar id = 0; id < d; ++id) {
+                                                        skew.pi.push_back(powers_e[apply1(automorphism_e, id) * step]);
+                                                    }
+                                                }
+                                                finish(skew, n);
+                                                skews.emplace_back(std::move(skew));
+                                                ++increment2;
+                                            }
+                                        }
+                                    }
+                                    if (increment != increment2) {
+                                        throw "";
+                                    }
+                                    clear(number_n_h);
+                                }
                             }
                         }
                     }
-                    for (const auto power: powers) {
+                    for (const auto power: powers_e) {
                         visited_e[power] = true;
                     }
-                    powers.clear();
+                    powers_e.clear();
                 }
                 for (auto e = rH + 1; e < r; e += rH) {
                     visited_e[e] = false;
@@ -466,13 +680,434 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
     return nskew;
 }
 
+PROFILE Scalar computeAutomorphisms(Number &number) {
+    computeCoprimes(number);
+    const auto n = number.n;
+    for (const auto coprime: number.coprimes) {
+        SkewMorphism automorphism;
+        Orbit orbit;
+        automorphism.n = n;
+        automorphism.d = 1;
+        automorphism.h = coprime - 1;
+        automorphism.pi.resize(n, 1);
+//        automorphism.function.resize(n, 0);
+        automorphism.permutation.places.resize(n);
+        for (Scalar i = 0; i < n; ++i) {
+//            automorphism.function[i] = (i * coprime) % n;
+            auto &orbitPlace = automorphism.permutation.places[i];
+            if (orbitPlace.orbitIndex != -1) {
+                continue;
+            }
+            auto c = i;
+            do {
+                automorphism.permutation.places[c].orbitIndex = automorphism.permutation.orbits.size();
+                automorphism.permutation.places[c].indexOnOrbit = orbit.size();
+                orbit.push_back(c);
+                c = (c * coprime) % n;
+            } while (c != i);
+            if (i == 1) {
+                automorphism.r = orbit.size();
+            }
+            if (orbit.size() > 1) {
+                automorphism.permutation.orbits.emplace_back(std::move(orbit));
+            } else {
+                automorphism.permutation.places[c].orbitIndex = -1;
+                automorphism.permutation.places[c].indexOnOrbit = i;
+            }
+            orbit.clear();
+        }
+        computeMaxOrbits(automorphism);
+        number.automorphisms.emplace_back(std::move(automorphism));
+    }
+    clear(number);
+    return number.phi;
+}
+
+std::string to_string(const SkewMorphism &skewMorphism) {
+    std::string result;
+    result.reserve(skewMorphism.pi.size() * 7);
+    for (const auto &orbit: skewMorphism.permutation.orbits) {
+        result += "(";
+        bool first = true;
+        for (const auto e: orbit) {
+            result += (first ? "" : ", ") + std::to_string(e);
+            first = false;
+        }
+        result += ")";
+    }
+    return result;
+}
+
+PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& function) {
+    const auto n = skewMorphism.n;
+    bool good = true;
+    Function c_j(n, 0);
+    std::vector<bool> visited_j(skewMorphism.d, false);
+    for (std::size_t ij = 0; ij < skewMorphism.d; ++ij) {
+        const auto j = skewMorphism.pi[ij];
+        for (Scalar i = 1; i < n; ++i) {
+            c_j[i] = apply(skewMorphism, skewMorphism.r - j, i);//TODO: skewMorphism.r je order?
+        }
+        std::size_t ijj = 0;
+        for (; ijj < skewMorphism.d; ++ijj) {
+            if (visited_j[ijj]) {
+                continue;
+            }
+            const auto e = c_j[ijj];
+            good = true;
+            for (std::size_t x = 1; x < n; ++x) {
+                if ((c_j[(function[x] + ijj) % n] + (n - x)) % n != e) {
+                    good = false;
+                    break;
+                }
+            }
+            if (good) {
+                visited_j[ijj] = true;
+                break;
+            }
+        }
+        if (!good) {
+            break;
+        }
+        for (std::size_t i = ijj + skewMorphism.d; i < n; i += skewMorphism.d) {
+            const auto e = c_j[i];
+            for (std::size_t x = 1; x < n; ++x) {
+                if ((c_j[(function[x] + i) % n] + (n - x)) % n != e) {
+                    good = false;
+                    break;
+                }
+            }
+            if (!good) {
+                break;
+            }
+        }
+        if (!good) {
+            break;
+        }
+    }
+    for (const auto v: visited_j) {
+        if (!v) {
+            good = false;
+            break;
+        }
+    }
+    return good;
+}
+
+PROFILE void computePiFromRo(const Orbit &orbit1_ro, SkewMorphism &phi) {
+    for (Scalar i = 0; i < phi.n; i += orbit1_ro.size()) {//TODO: neduplikovat
+        for (Scalar j = 0; j < orbit1_ro.size(); ++j) {
+            phi.pi.push_back(orbit1_ro[j]);
+        }
+    }
+}
+
+PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &psi, const Orbit &t, const SkewMorphism &phi) {//TODO: inputs p, phi...
+    const auto n = phi.n;
+    Function increment = Function(phi.d);
+    for (Scalar i = 0; i < phi.d; ++i) {
+        const auto pi = phi.pi[i];
+        const auto pi_mod_p = pi % p;//TODO: ro mod, div
+        const auto pi_div_p = pi / p;
+        increment[i] = apply2(psi, pi_div_p, t[pi_mod_p]);
+    }
+    Function function = Function(n, 0);
+    for (Scalar i1 = 0; i1 < n; i1 += phi.d) {
+        for (Scalar i2 = 1; i2 <= phi.d; ++i2) {
+            const auto i = i1 + i2;
+            if (i >= n) {
+                return function;
+            }
+            if (function[i] != 0) {//TODO: musia sa rovnat
+                continue;
+            }
+            function[i] = function[i - 1] + increment[i2 - 1];
+            if (function[i] >= n) function[i] -= n;
+        }
+    }
+    return function;
+}
+
+PROFILE bool isPermutation(Function &function) {//TODO: spojit s pocitanim funkcie
+    std::vector<bool> visited(function.size(), false);
+    for (const auto f: function) {
+        if (visited[f]) {
+            return false;
+        }
+        visited[f] = true;
+    }
+    return true;
+}
+
+PROFILE void computeOrbits(SkewMorphism &skewMorphism, const Function &function) {//TODO: zjednotit
+    const auto n = skewMorphism.n;
+    skewMorphism.permutation.orbits.reserve(n);
+    for (Scalar i = 0; i < n; ++i) {
+        auto &orbitPlace = skewMorphism.permutation.places[i];
+        if (orbitPlace.orbitIndex != -1) {
+            continue;
+        }
+        auto c = function[i];
+        if (c == i) {
+            orbitPlace.indexOnOrbit = i;
+            continue;
+        }
+        const auto orbitIndex = skewMorphism.permutation.orbits.size();
+        skewMorphism.permutation.orbits.emplace_back();
+        auto &orbit = skewMorphism.permutation.orbits.back();
+        orbit.reserve(skewMorphism.r);
+        orbitPlace.orbitIndex = orbitIndex;
+        orbitPlace.indexOnOrbit = orbit.size();
+        orbit.push_back(i);
+        do {
+            auto &orbitPlaceC = skewMorphism.permutation.places[c];
+            orbitPlaceC.orbitIndex = orbitIndex;
+            orbitPlaceC.indexOnOrbit = orbit.size();
+            orbit.push_back(c);
+            c = function[c];
+        } while (c != i);
+    }
+}
+
+PROFILE void computeOrbit1(SkewMorphism &skewMorphism, const Function &function) {//TODO: inputs outputs
+    skewMorphism.permutation.orbits.reserve(skewMorphism.n);
+    const Scalar i = 1;
+    auto &orbitPlace = skewMorphism.permutation.places[i];
+    if (orbitPlace.orbitIndex != -1) {
+        return;
+    }
+    auto c = function[i];
+    if (c == i) {
+        orbitPlace.indexOnOrbit = i;
+        return;
+    }
+    const auto orbitIndex = skewMorphism.permutation.orbits.size();
+    skewMorphism.permutation.orbits.emplace_back();
+    auto &orbit = skewMorphism.permutation.orbits.back();
+    orbit.reserve(skewMorphism.r);
+    orbitPlace.orbitIndex = orbitIndex;
+    orbitPlace.indexOnOrbit = orbit.size();
+    orbit.push_back(i);
+    do {
+        auto &orbitPlaceC = skewMorphism.permutation.places[c];
+        orbitPlaceC.orbitIndex = orbitIndex;
+        orbitPlaceC.indexOnOrbit = orbit.size();
+        orbit.push_back(c);
+        c = function[c];
+    } while (c != i);
+}
+
+PROFILE Function computeFunction(const SkewMorphism &skewMorphism, const Orbit &orbit1) {//TODO: inputs
+    const auto n = skewMorphism.n;
+    Function function(n, 0);
+    Scalar oldO = 1;
+    for (std::size_t i = 1; i < orbit1.size(); ++i) {
+        const auto o = orbit1[i];
+        function[oldO] = o;
+        oldO = o;
+    }
+    function[oldO] = 1;
+    for (Scalar i = 2; i < n; ++i) {
+        if (function[i] != 0) {
+            continue;
+        }
+        function[i] = function[i - 1] + orbit1[skewMorphism.pi[i - 1]];
+        if (function[i] >= n) function[i] -= n;
+    }
+    return function;
+}
+
+PROFILE bool compareFunctions(const Function &function, const Function &function2) {
+    for (std::size_t i = 0; i < function.size(); ++i) {
+        if (function[i] != function2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+PROFILE bool checkPsiCycles(const Scalar p, const SkewMorphism &psi, const Orbit &orbit1) {
+    for (std::size_t i = p; i < orbit1.size(); ++i) {
+        if (orbit1[i] != apply1(psi, orbit1[i - p])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
+    for (std::size_t i = 1; i < ro.d; ++i) {
+        if (orbit1[i] % ro.r != ro.pi[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//TODO: nemozu nejake nasobenia scitania pretiect?
+PROFILE Scalar computeProperNotPreserving(Number &number) {
+    Scalar nskew = 0;
+
+    std::unordered_set<std::string> aaaaa;
+    const auto n = number.n;
+    const auto number_nphi = numberCache[n * number.phi];
+
+    const auto maxPrime = getMaxPrime(number);
+    auto n_div_maxPrime = n / maxPrime;
+
+    auto counter = 0;
+
+    for (const auto m: number_nphi.divisors) {
+        //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
+        ++counter;
+        if (m >= n) {
+            continue;
+        }
+        const auto &number_m = numberCache[m];
+        if (isCoprime(number, number_m)) {
+            continue;
+        }
+        for (std::size_t ro_index = 0; ro_index < number_m.nproper; ++ro_index) {
+            //printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
+            const auto &ro = ro_index < number_m.properCosetPreserving.size() ? number_m.properCosetPreserving[ro_index] : number_m.properNonPreserving[ro_index - number_m.properCosetPreserving.size()];
+
+            if (n % (ro.r * maxPrime) != 0) {
+                continue;
+            }
+            if (isCoprime(numberCache[n / ro.r], number_m)) {
+                continue;
+            }
+
+            const auto p = ro.d;
+            const auto ord_psi = m / p;
+            
+            const auto &orbit1_ro = getOrbit1(ro);
+            for (std::size_t psi_index = 0; psi_index < number.npreserving; ++psi_index) {
+                //printf("\r(%d / %ld) x (%ld / %d) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper, psi_index, number.npreserving);
+                const auto &psi = psi_index < number.automorphisms.size() ? number.automorphisms[psi_index] : number.properCosetPreserving[psi_index - number.automorphisms.size()];
+
+                if (psi.r != ord_psi) {
+                    continue;
+                }
+                if (psi.h % ro.r != 0) {
+                    continue;
+                }
+                if (psi.max_orbits < p) {
+                    continue;
+                }
+
+                std::vector<Scalar> free_x_index;
+                free_x_index.reserve(ro.free_x.size());
+                std::vector<std::vector<Scalar>> free_x_values;
+                free_x_values.reserve(ro.free_x.size());
+                std::size_t product = 1;
+                for (const auto &index_modulo_pair: ro.free_x) {
+                    free_x_values.emplace_back();
+                    free_x_values.reserve(n / ro.r);
+                    const auto index = index_modulo_pair.first;
+                    const auto modulo = index_modulo_pair.second;
+                    free_x_index.push_back(index);
+                    for (Scalar value = modulo; value < n; value += ro.r) {
+                        const auto orbitIndex = psi.permutation.places[value].orbitIndex;
+                        const auto orbitSize = orbitIndex == -1 ? 1 : psi.permutation.orbits[orbitIndex].size();
+                        if (orbitSize != psi.r) {
+                            continue;
+                        }
+                        free_x_values.back().push_back(value);
+                    }
+                    product *= free_x_values.back().size();
+                }
+                for (std::size_t product_index = 0; product_index < product; ++product_index) {
+                    std::vector<std::size_t> splitIndex;
+                    splitIndex.reserve(free_x_values.size());
+                    auto mutable_index = product_index;
+                    for (const auto &values: free_x_values) {
+                        const auto size = values.size();
+                        splitIndex.push_back(mutable_index % size);
+                        mutable_index /= size;
+                    }
+                    Orbit t(p, 0);
+                    t[0] = 1;
+//                    std::set<Scalar> orbitIndices;
+                    for (std::size_t i = 0; i < free_x_index.size(); ++i) {
+                        const auto index = free_x_index[i];
+                        const auto valueIndex = splitIndex[i];
+                        const auto value = free_x_values[i][valueIndex];
+                        t[index] = value;
+
+//                        orbitIndices.insert(psi.permutation.places[value].orbitIndex == -1 ? -(value + 1) : psi.permutation.places[value].orbitIndex);
+                    }
+//                    if (orbitIndices.size() != free_x_index.size()) {
+//                        continue;
+//                    }
+
+                    SkewMorphism phi;
+                    phi.n = n;
+                    phi.pi.reserve(n);
+                    phi.d = ro.r;
+                    phi.h = t[1] - 1;
+                    phi.r = m;
+                    phi.permutation.places.resize(n);
+                    computePiFromRo(orbit1_ro, phi);
+                    Function function = computeFunctionFromPsiPi(p, psi, t, phi);
+                    if (!isPermutation(function)) {
+                        continue;
+                    }
+                    computeOrbit1(phi, function);
+
+                    const auto &orbit1 = getOrbit1(phi);
+                    if (orbit1.size() != phi.r) {
+                        continue;
+                    }
+
+                    if (!checkFirstPMod(ro, orbit1)) {
+                        continue;
+                    }
+                    Function function2 = computeFunction(phi, orbit1);
+                    if (!compareFunctions(function, function2)) {
+                        continue;
+                    }
+                    if (!checkPsiCycles(p, psi, orbit1)) {
+                        continue;
+                    }
+                    computeOrbits(phi, function);
+                    if (!isSkewMorphism(phi, function)) {
+                        continue;
+                    }
+
+                    std::string string = to_string(phi);
+                    if (aaaaa.find(string) != aaaaa.end()) {
+                        continue;
+                    }
+
+                    computeMaxOrbits(phi);
+                    const auto &orbit11 = getOrbit1(phi);
+                    for (std::size_t i = 1; i < orbit1.size(); ++i) {
+                        const auto index = orbit1[i] % phi.d;
+                        const auto modulo = phi.pi[index];
+                        phi.free_x[index] = modulo;
+                    }
+
+                    aaaaa.insert(string);
+                    number.properNonPreserving.emplace_back(std::move(phi));
+                    ++nskew;
+                }
+            }
+        }
+    }
+    //printf("\r");
+//    printf("%d %ld\n", n, aaaaa.size());
+
+    return nskew;
+}
+
 PROFILE void countSkewmorphisms(Number &number) {
     if (number.nskew != 0) {
         return;
     }
     const auto n = number.n;
     const auto phi = number.phi;
-    auto nskew = phi;
+    auto nskew = computeAutomorphisms(number);
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
         const auto maxPrime = getMaxPrime(number);
@@ -484,21 +1119,39 @@ PROFILE void countSkewmorphisms(Number &number) {
             const auto n_div_d = n / d;
             auto &number_n_div_d = numberCache[n_div_d];
 
-            nskew += sEquals1(d, number_n_div_d);
-            nskew += sOtherThan1(d, number_n_div_d);
+            nskew += sEquals1(d, number_n_div_d, number.properCosetPreserving);
+            if (nskew != number.automorphisms.size() + number.properCosetPreserving.size()) {
+                throw "";
+            }
+            nskew += sOtherThan1(d, number_n_div_d, number.properCosetPreserving);
+            if (nskew != number.automorphisms.size() + number.properCosetPreserving.size()) {
+                throw "";
+            }
+        }
+        number.npreserving = phi + number.properCosetPreserving.size();
+        if (number.powerOfTwo > 16 || !number.squareFree) {
+            nskew += computeProperNotPreserving(number);
+            if (nskew != number.automorphisms.size() + number.properCosetPreserving.size() + number.properNonPreserving.size()) {
+                throw "";
+            }
         }
     }
     number.nskew = nskew;
+    number.nproper = nskew - phi;
 }
 
 void print(const Number &number) {
     const auto n = number.n;
     const auto phi = number.phi;
     const auto nskew = number.nskew;
-    printf("Total number of skew morphisms of C_%d is %d\n", n, nskew);
-    printf("Check sub-total of automorphisms of C_%d is %d\n", n, phi);
-    auto perc = static_cast<Scalar>(std::round(float(100 * phi) / float(nskew)));
-    printf("Automorphisms account for ~%d%% of all skew morphisms.\n\n", perc);
+    const auto nproper = number.nproper;
+    const auto npreserving = number.npreserving - phi;
+    const auto nother = nproper - npreserving;
+//    printf("Total number of skew morphisms of C_%d is %d\n", n, nskew);
+//    printf("Check sub-total of automorphisms of C_%d is %d\n", n, phi);
+//    auto perc = static_cast<Scalar>(std::round(float(100 * phi) / float(nskew)));
+//    printf("Automorphisms account for ~%d%% of all skew morphisms.\n\n", perc);
+    printf("%d    %d + %d (%d + %d)\n", n, nproper, phi, npreserving, nother);
 }
 
 void fprint(const Number &number, std::ostream& stream) {
@@ -518,7 +1171,7 @@ void clear(Number &number) {
 }
 
 int main(int argc, char *argv[]) {
-    Scalar N = 10000;
+    Scalar N = 100;
     if (argc > 1) {
         N = std::stoi(argv[1]);
     }
@@ -527,15 +1180,19 @@ int main(int argc, char *argv[]) {
         A = std::stoi(argv[2]);
     }
 
-    prepareNumbers(N);
+    //TODO: compute coprimes ale len do N
+    prepareNumbers(N * N);
 
     for (auto n = A; n <= N; ++n) {
         auto &number = numberCache[n];
-        if (number.powerOfTwo <= 16 && number.squareFree) {
+//        if (number.powerOfTwo <= 16 && number.squareFree) {
             countSkewmorphisms(number);
+            if (number.nskew != number.automorphisms.size() + number.properCosetPreserving.size() + number.properNonPreserving.size()) {
+                throw "";
+            }
 //            fprint(number, std::cerr);
-        }
-        if (number.nskew != 0) {
+//        }
+        if (number.nskew != number.phi) {
             print(number);
         }
     }
