@@ -779,30 +779,26 @@ PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& fu
     return good;
 }
 
-PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &psi, const Orbit &t, const Function &pi) {//TODO: inputs p, phi...
+PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &psi, Orbit &t, const Function &pi) {//TODO: inputs p, phi...
     const auto n = psi.n;
-    Function increment = Function(pi.size());
-    for (Scalar i = 0; i < pi.size(); ++i) {
-        const auto pi_ = pi[i];
-        const auto pi_mod_p = pi_ % p;//TODO: ro mod, div
-        const auto pi_div_p = pi_ / p;
-        increment[i] = apply2(psi, pi_div_p, t[pi_mod_p]);
-    }
-    Function function = Function(n, 0);
-    for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
-        for (std::size_t i2 = 1; i2 <= pi.size(); ++i2) {
-            const auto i = i1 + i2;
-            if (i >= n) {
-                return function;
-            }
-            if (function[i] != 0) {//TODO: musia sa rovnat
-                continue;
-            }
-            function[i] = function[i - 1] + increment[i2 - 1];//TODO: zjednotit s computeFunction
-            if (function[i] >= n) function[i] -= n;
+    for (std::size_t i = 0; i < p; ++i) {
+        const auto e = t[i];
+        if (e == 0) {
+            continue;
+        }
+        const auto &place = psi.permutation.places[e];
+        const auto &orbit = psi.permutation.orbits[place.orbitIndex];
+        const auto increment = [orbitSize = psi.r](auto &index) {
+            index += 1;
+            if (index == orbitSize) index = 0;
+        };
+        auto index = place.indexOnOrbit;
+        for (std::size_t j = p + i; j < t.size(); j += p) {
+            increment(index);
+            t[j] = orbit[index];
         }
     }
-    return function;
+    return computeFunction(n, pi, t);
 }
 
 PROFILE bool isPermutation(Function &function) {//TODO: spojit s pocitanim funkcie
@@ -846,32 +842,15 @@ PROFILE void computeOrbits(SkewMorphism &skewMorphism, const Function &function)
     }
 }
 
-PROFILE void computeOrbit1(SkewMorphism &skewMorphism, const Function &function) {//TODO: inputs outputs
-    skewMorphism.permutation.orbits.reserve(skewMorphism.n);
-    const Scalar i = 1;
-    auto &orbitPlace = skewMorphism.permutation.places[i];
-    if (orbitPlace.orbitIndex != -1) {
-        return;
-    }
-    auto c = function[i];
-    if (c == i) {
-        orbitPlace.indexOnOrbit = i;
-        return;
-    }
-    const auto orbitIndex = skewMorphism.permutation.orbits.size();
-    skewMorphism.permutation.orbits.emplace_back();
-    auto &orbit = skewMorphism.permutation.orbits.back();
-    orbit.reserve(skewMorphism.r);
-    orbitPlace.orbitIndex = orbitIndex;
-    orbitPlace.indexOnOrbit = orbit.size();
-    orbit.push_back(i);
+PROFILE Orbit computeOrbit1(const Function &function, Scalar r) {//TODO: inputs outputs
+    Orbit orbit1;
+    orbit1.reserve(r);
+    Scalar c = 1;
     do {
-        auto &orbitPlaceC = skewMorphism.permutation.places[c];
-        orbitPlaceC.orbitIndex = orbitIndex;
-        orbitPlaceC.indexOnOrbit = orbit.size();
-        orbit.push_back(c);
+        orbit1.push_back(c);
         c = function[c];
-    } while (c != i);
+    } while (c != 1);
+    return orbit1;
 }
 
 PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1) {//TODO: inputs
@@ -879,10 +858,14 @@ PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbi
     Scalar oldO = 1;
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
-        function[oldO] = o;
+        if (o != 0 && oldO != 0) {
+            function[oldO] = o;
+        }
         oldO = o;
     }
-    function[oldO] = 1;
+    if (oldO != 0) {
+        function[oldO] = 1;
+    }
 
     for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
         for (std::size_t i2 = 1; i2 <= pi.size(); ++i2) {
@@ -890,11 +873,14 @@ PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbi
             if (i >= n) {
                 return function;
             }
-            if (function[i] != 0) {//TODO: musia sa rovnat
-                continue;
+            auto value = function[i - 1] + orbit1[pi[i2 - 1]];
+            if (value >= n) value -= n;
+
+            if (function[i] == 0) {
+                function[i] = value;
+            } else if (function[i] != value) {
+                return {};
             }
-            function[i] = function[i - 1] + orbit1[pi[i2 - 1]];
-            if (function[i] >= n) function[i] -= n;
         }
     }
     return function;
@@ -950,14 +936,20 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
         if (isCoprime(number, number_m)) {
             continue;
         }
+        const auto r = m;
         for (std::size_t ro_index = 0; ro_index < number_m.nproper; ++ro_index) {
             //printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
             const auto &ro = ro_index < number_m.properCosetPreserving.size() ? number_m.properCosetPreserving[ro_index] : number_m.properNonPreserving[ro_index - number_m.properCosetPreserving.size()];
 
-            if (n % (ro.r * maxPrime) != 0) {
+            const auto d = ro.r;
+
+            if (n % (d * maxPrime) != 0) {
                 continue;
             }
-            if (isCoprime(numberCache[n / ro.r], number_m)) {
+
+            const auto n_div_d = n / d;
+
+            if (isCoprime(numberCache[n_div_d], number_m)) {
                 continue;
             }
 
@@ -972,7 +964,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                 if (psi.r != ord_psi) {
                     continue;
                 }
-                if (psi.h % ro.r != 0) {
+                if (psi.h % d != 0) {
                     continue;
                 }
                 if (psi.max_orbits < p) {
@@ -986,11 +978,11 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                 std::size_t product = 1;
                 for (const auto &index_modulo_pair: ro.free_x) {
                     free_x_values.emplace_back();
-                    free_x_values.reserve(n / ro.r);
+                    free_x_values.reserve(n_div_d);
                     const auto index = index_modulo_pair.first;
                     const auto modulo = index_modulo_pair.second;
                     free_x_index.push_back(index);
-                    for (Scalar value = modulo; value < n; value += ro.r) {
+                    for (Scalar value = modulo; value < n; value += d) {
                         const auto orbitIndex = psi.permutation.places[value].orbitIndex;
                         const auto orbitSize = orbitIndex == -1 ? 1 : psi.permutation.orbits[orbitIndex].size();
                         if (orbitSize != psi.r) {
@@ -1009,7 +1001,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         splitIndex.push_back(mutable_index % size);
                         mutable_index /= size;
                     }
-                    Orbit t(p, 0);
+                    Orbit t(r, 0);
                     t[0] = 1;
 //                    std::set<Scalar> orbitIndices;
                     for (std::size_t i = 0; i < free_x_index.size(); ++i) {
@@ -1017,6 +1009,8 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         const auto valueIndex = splitIndex[i];
                         const auto value = free_x_values[i][valueIndex];
                         t[index] = value;
+                        //TODO: pozri size_t
+                        //TODO: vyplnit celu orbitu
 
 //                        orbitIndices.insert(psi.permutation.places[value].orbitIndex == -1 ? -(value + 1) : psi.permutation.places[value].orbitIndex);
                     }
@@ -1024,34 +1018,40 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 //                        continue;
 //                    }
 
-                    SkewMorphism phi;
-                    phi.n = n;
-                    phi.d = ro.r;
-                    phi.h = t[1] - 1;
-                    phi.r = m;
-                    phi.permutation.places.resize(n);
                     const Function &pi = orbit1_ro;
                     Function function = computeFunctionFromPsiPi(p, psi, t, pi);
+                    if (function.empty()) {
+                        continue;
+                    }
                     if (!isPermutation(function)) {
                         continue;
                     }
-                    computeOrbit1(phi, function);
 
-                    const auto &orbit1 = getOrbit1(phi);
-                    if (orbit1.size() != phi.r) {
+                    Orbit orbit1 = computeOrbit1(function, r);
+
+                    if (orbit1.size() != r) {
                         continue;
                     }
 
                     if (!checkFirstPMod(ro, orbit1)) {
                         continue;
                     }
-                    Function function2 = computeFunction(n, pi, orbit1);
+                    Function function2 = computeFunction(n, pi, orbit1);//TODO: ktore checky treba robit?
+                    if (function2.empty()) {
+                        continue;
+                    }
                     if (!compareFunctions(function, function2)) {
                         continue;
                     }
                     if (!checkPsiCycles(p, psi, orbit1)) {
                         continue;
                     }
+                    SkewMorphism phi;
+                    phi.n = n;
+                    phi.d = d;
+                    phi.h = t[1] - 1;
+                    phi.r = r;
+                    phi.permutation.places.resize(n);
                     computeOrbits(phi, function);
                     phi.pi = pi;
                     if (!isSkewMorphism(phi, function)) {
