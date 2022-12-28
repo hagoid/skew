@@ -8,6 +8,8 @@
 #include <map>
 #include <sstream>
 #include <unordered_set>
+#include <csignal>
+#include <fstream>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -94,6 +96,7 @@ PROFILE Scalar apply1(const SkewMorphism &skewMorphism, Scalar a) {
 
 Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1);//TODO
 
+//TODO: zjednotit
 PROFILE void finish(SkewMorphism &skewMorphism) {//TODO: zjednotit, auto, coset pre s1 sother, other
     const auto n = skewMorphism.n;
     const auto &orbits = skewMorphism.permutation.orbits;
@@ -421,7 +424,33 @@ PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar p
     return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
 }
 
-PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d, std::vector<SkewMorphism> &skews) {
+PROFILE std::string to_short_string(const Orbit& orbit1, const Function& pi) {
+    std::string result;
+    result += "(";
+    bool first = true;
+    for (const auto e: orbit1) {
+        result += (first ? "" : ", ") + std::to_string(e);
+        first = false;
+    }
+    result += ")";
+    result += "[";
+    first = true;
+    for (const auto e: pi) {
+        result += (first ? "" : ", ") + std::to_string(e);
+        first = false;
+    }
+    result += "]";
+    return result;
+}
+
+PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
+    if (skewMorphism.permutation.orbits.empty()) {
+        return "(1)[1]";
+    }
+    return to_short_string(getOrbit1(skewMorphism), skewMorphism.pi);
+}
+
+PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d, std::vector<SkewMorphism> &skews, std::ofstream &file) {
     Scalar nskew = 0;
     std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
     std::vector<Scalar> powers;//TODO: global
@@ -482,6 +511,7 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d, std::vecto
                                     skew.pi.push_back(powers[apply1(automorphism, id) * step]);
                                 }
                                 finish(skew);
+                                file << to_short_string(skew) << std::endl;
                                 skews.emplace_back(std::move(skew));
                             }
                         }
@@ -501,7 +531,7 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d, std::vecto
     return nskew;
 }
 
-PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, std::vector<SkewMorphism> &skews) {
+PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, std::vector<SkewMorphism> &skews, std::ofstream &file) {
     Scalar nskew = 0;
     for (const auto gcd_b: number_n_div_d.divisors) {
         if (gcd_b == number_n_div_d.n) {
@@ -639,6 +669,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, std::ve
                                                     skew.pi.push_back(powers_e[apply1(automorphism_e, id) * step]);
                                                 }
                                                 finish(skew);
+                                                file << to_short_string(skew) << std::endl;
                                                 skews.emplace_back(std::move(skew));
                                                 ++increment2;
                                             }
@@ -668,6 +699,7 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d, std::ve
 }
 
 PROFILE Scalar computeAutomorphisms(Number &number) {
+    std::ofstream file(std::to_string(number.n) + "_auto.txt");
     computeCoprimes(number);
     const auto n = number.n;
     for (const auto coprime: number.coprimes) {
@@ -702,6 +734,7 @@ PROFILE Scalar computeAutomorphisms(Number &number) {
             orbit.clear();
         }
         computeMaxOrbits(automorphism);
+        file << to_short_string(automorphism) << std::endl;
         number.automorphisms.emplace_back(std::move(automorphism));
     }
     clear(number);
@@ -913,12 +946,78 @@ PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
     return true;
 }
 
+namespace
+{
+    volatile std::sig_atomic_t stop = false;
+}
+
+void signal_handler(int signal)
+{
+    stop = true;
+}
+
+PROFILE SkewMorphism from_short_string(const std::string &string, Scalar n) {
+    SkewMorphism result;
+    std::istringstream stream;
+    stream.str(string);
+    char c = '\0';
+    Orbit orbit1;
+    while (c != ')') {
+        stream.get(c);
+        Scalar i = 0;
+        stream >> i;
+        orbit1.push_back(i);
+        stream.get(c);
+    }
+    Function pi;
+    while (c != ']') {
+        stream.get(c);
+        Scalar i = 0;
+        stream >> i;
+        pi.push_back(i);
+        stream.get(c);
+    }
+    result.d = pi.size();
+    result.r = orbit1.size();
+    result.n = n;
+    if (orbit1.size() == 1) {
+        result.h = 0;
+    } else {
+        result.h = orbit1[1] - 1;
+        result.permutation.orbits.emplace_back(std::move(orbit1));
+    }
+    result.pi = std::move(pi);
+    finish(result);
+    return result;
+}
+
 //TODO: nemozu nejake nasobenia scitania pretiect?
 PROFILE Scalar computeProperNotPreserving(Number &number) {
     Scalar nskew = 0;
 
     std::unordered_set<std::string> aaaaa;
     const auto n = number.n;
+
+    std::ofstream file(std::to_string(n) + "_other.txt");
+//    {
+//        std::ifstream ifile("../skew4/" + std::to_string(n) + "_other.txt");
+//        std::string line;
+//        while (std::getline(ifile, line)) {
+//            auto skew = from_short_string(line, n);
+//            number.properNonPreserving.emplace_back(std::move(skew));
+//            aaaaa.insert(line);
+//            file << line << std::endl;
+//            ++nskew;
+//        }
+//    }
+//    //!!! OVERIT CI TO NEPRETEKA
+//    if (n < 201) {
+//        return nskew;
+//    }
+
+    //TOOO: viacero kvocientov, ale duplicita bola az pri 81
+    //TODO: lambda
+
     const auto number_nphi = numberCache[n * number.phi];
 
     const auto maxPrime = getMaxPrime(number);
@@ -927,8 +1026,11 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
     auto counter = 0;
 
     for (const auto m: number_nphi.divisors) {
-        //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
+//        printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
         ++counter;
+//        if (n == 162 && counter < 12) {
+//            continue;
+//        }
         if (m >= n) {
             continue;
         }
@@ -938,7 +1040,10 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
         }
         const auto r = m;
         for (std::size_t ro_index = 0; ro_index < number_m.nproper; ++ro_index) {
-            //printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
+//            printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
+//            if (n == 162 && counter == 12 && ro_index < 592) {
+//                continue;
+//            }
             const auto &ro = ro_index < number_m.properCosetPreserving.size() ? number_m.properCosetPreserving[ro_index] : number_m.properNonPreserving[ro_index - number_m.properCosetPreserving.size()];
 
             const auto d = ro.r;
@@ -955,10 +1060,13 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
             const auto p = ro.d;
             const auto ord_psi = m / p;
-            
+
             const auto &orbit1_ro = getOrbit1(ro);
             for (std::size_t psi_index = 0; psi_index < number.npreserving; ++psi_index) {
-                //printf("\r(%d / %ld) x (%ld / %d) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper, psi_index, number.npreserving);
+//                printf("\r(%d / %ld) x (%ld / %d) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper, psi_index, number.npreserving);
+//                if (n == 162 && counter == 12 && ro_index == 592 && psi_index < 55) {
+//                    continue;
+//                }
                 const auto &psi = psi_index < number.automorphisms.size() ? number.automorphisms[psi_index] : number.properCosetPreserving[psi_index - number.automorphisms.size()];
 
                 if (psi.r != ord_psi) {
@@ -993,6 +1101,13 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     product *= free_x_values.back().size();
                 }
                 for (std::size_t product_index = 0; product_index < product; ++product_index) {
+//                    if (n == 162 && counter == 12 && ro_index == 592 && psi_index == 55 && product_index < 314786075) {
+//                        continue;
+//                    }
+                    if (stop) {//12 509 55 254544063 //12 592 55 314786075
+                        printf("\r%d %ld %ld %ld                                \n", counter, ro_index, psi_index, product_index);
+                        return nskew;
+                    }
                     std::vector<std::size_t> splitIndex;
                     splitIndex.reserve(free_x_values.size());
                     auto mutable_index = product_index;
@@ -1071,7 +1186,11 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         phi.free_x[index] = modulo;
                     }
 
+                    //TODO: nie je to vzdy h,s,r,d,e(ro)
+                    //TODO: ukladanie, nacitanie a pokracovanie...
                     aaaaa.insert(string);
+
+                    file << to_short_string(phi) << std::endl;
                     number.properNonPreserving.emplace_back(std::move(phi));
                     ++nskew;
                 }
@@ -1093,6 +1212,8 @@ PROFILE void countSkewmorphisms(Number &number) {
     auto nskew = computeAutomorphisms(number);
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
+        std::ofstream file(std::to_string(number.n) + "_coset.txt");
+
         const auto maxPrime = getMaxPrime(number);
         const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
         for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
@@ -1102,11 +1223,11 @@ PROFILE void countSkewmorphisms(Number &number) {
             const auto n_div_d = n / d;
             auto &number_n_div_d = numberCache[n_div_d];
 
-            nskew += sEquals1(d, number_n_div_d, number.properCosetPreserving);
+            nskew += sEquals1(d, number_n_div_d, number.properCosetPreserving, file);
             if (nskew != number.automorphisms.size() + number.properCosetPreserving.size()) {
                 throw "";
             }
-            nskew += sOtherThan1(d, number_n_div_d, number.properCosetPreserving);
+            nskew += sOtherThan1(d, number_n_div_d, number.properCosetPreserving, file);
             if (nskew != number.automorphisms.size() + number.properCosetPreserving.size()) {
                 throw "";
             }
@@ -1154,6 +1275,8 @@ void clear(Number &number) {
 }
 
 int main(int argc, char *argv[]) {
+    std::signal(SIGINT, signal_handler);
+
     Scalar N = 100;
     if (argc > 1) {
         N = std::stoi(argv[1]);
@@ -1167,6 +1290,9 @@ int main(int argc, char *argv[]) {
     prepareNumbers(N * N);
 
     for (auto n = A; n <= N; ++n) {
+        if (stop) {
+            break;
+        }
         auto &number = numberCache[n];
 //        if (number.powerOfTwo <= 16 && number.squareFree) {
             countSkewmorphisms(number);
