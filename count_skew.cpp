@@ -5,7 +5,6 @@
 #include <ostream>
 #include <set>
 #include <vector>
-#include <map>
 #include <sstream>
 #include <unordered_set>
 
@@ -37,7 +36,7 @@ struct Permutation {
 struct SkewMorphism {
     Permutation permutation;
     Function pi;
-    std::map<Index, Scalar> free_x;//TODO: vector
+    std::vector<Index> free_x;
     Scalar n = 0;
     Scalar d = 0;
     Scalar h = 0;
@@ -45,18 +44,26 @@ struct SkewMorphism {
     Scalar max_orbits = 0;
 };
 
-PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {
-    const auto &orbits = skewMorphism.permutation.orbits;
+PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
+    return skewMorphism.permutation.orbits[0];
+}
+
+PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj free_x rata
+    auto &orbits = skewMorphism.permutation.orbits;
     if (orbits.empty()) {
         skewMorphism.max_orbits = skewMorphism.permutation.places.size();
         return;
     }
     skewMorphism.max_orbits = std::count_if(orbits.begin(), orbits.end(),
                                             [r = skewMorphism.r](const auto &orbit) { return orbit.size() == r; });
-}
 
-PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
-    return skewMorphism.permutation.orbits[0];
+    const auto &orbit1 = getOrbit1(skewMorphism);
+    std::set<Index> set;
+    for (std::size_t i = 1; i < orbit1.size(); ++i) {
+        const auto index = orbit1[i] % skewMorphism.d;
+        set.insert(index);
+    }
+    std::copy(set.begin(), set.end(), std::back_inserter(skewMorphism.free_x));
 }
 
 PROFILE Scalar apply(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {
@@ -130,13 +137,6 @@ PROFILE void finish(SkewMorphism &skewMorphism) {//TODO: zjednotit, auto, coset 
         orbit.clear();
     }
     computeMaxOrbits(skewMorphism);
-    if (!orbits.empty()) {
-        for (std::size_t i = 1; i < orbit1.size(); ++i) {
-            const auto index = orbit1[i] % skewMorphism.d;
-            const auto modulo = skewMorphism.pi[index];
-            skewMorphism.free_x[index] = modulo;
-        }
-    }
 }
 
 struct Number {//TODO: Cn
@@ -971,17 +971,14 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     continue;
                 }
 
-                std::vector<Scalar> free_x_index;
-                free_x_index.reserve(ro.free_x.size());
+                std::vector<Index> free_x_index = ro.free_x;
                 std::vector<std::vector<Scalar>> free_x_values;
-                free_x_values.reserve(ro.free_x.size());
+                free_x_values.reserve(free_x_index.size());
                 std::size_t product = 1;
-                for (const auto &index_modulo_pair: ro.free_x) {
+                for (const auto index: free_x_index) {
                     free_x_values.emplace_back();
-                    free_x_values.reserve(n_div_d);
-                    const auto index = index_modulo_pair.first;
-                    const auto modulo = index_modulo_pair.second;
-                    free_x_index.push_back(index);
+                    free_x_values.back().reserve(n_div_d);
+                    const auto modulo = ro.pi[index];
                     for (Scalar value = modulo; value < n; value += d) {
                         const auto orbitIndex = psi.permutation.places[value].orbitIndex;
                         const auto orbitSize = orbitIndex == -1 ? 1 : psi.permutation.orbits[orbitIndex].size();
@@ -1064,12 +1061,6 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     }
 
                     computeMaxOrbits(phi);
-                    const auto &orbit11 = getOrbit1(phi);
-                    for (std::size_t i = 1; i < orbit1.size(); ++i) {
-                        const auto index = orbit1[i] % phi.d;
-                        const auto modulo = phi.pi[index];
-                        phi.free_x[index] = modulo;
-                    }
 
                     aaaaa.insert(string);
                     number.properNonPreserving.emplace_back(std::move(phi));
