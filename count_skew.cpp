@@ -48,12 +48,20 @@ PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
     return skewMorphism.permutation.orbits[0];
 }
 
-PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj free_x rata
+PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat sorti to a este to aj free_x rata
     auto &orbits = skewMorphism.permutation.orbits;
     if (orbits.empty()) {
         skewMorphism.max_orbits = skewMorphism.permutation.places.size();
         return;
     }
+
+    std::sort(orbits.begin() + 1, orbits.end(), [](const auto &lhs, const auto &rhs) { return lhs.size() > rhs.size(); });
+    for (Index i = 0; i < orbits.size(); ++i) {
+        for (const auto e: orbits[i]) {
+            skewMorphism.permutation.places[e].orbitIndex = i;
+        }
+    }
+
     skewMorphism.max_orbits = std::count_if(orbits.begin(), orbits.end(),
                                             [r = skewMorphism.r](const auto &orbit) { return orbit.size() == r; });
 
