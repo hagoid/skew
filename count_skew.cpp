@@ -961,6 +961,9 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                 //printf("\r(%d / %ld) x (%ld / %d) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper, psi_index, number.npreserving);
                 const auto &psi = psi_index < number.automorphisms.size() ? number.automorphisms[psi_index] : number.properCosetPreserving[psi_index - number.automorphisms.size()];
 
+                if (psi.h == 0) {
+                    continue;
+                }
                 if (psi.r != ord_psi) {
                     continue;
                 }
