@@ -67,7 +67,7 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat so
 
     const auto &orbit1 = getOrbit1(skewMorphism);
     std::set<Index> set;
-    for (std::size_t i = 1; i < orbit1.size(); ++i) {
+    for (std::size_t i = 1; i < orbit1.size(); ++i) {//TODO: preco ideme od 1?
         const auto index = orbit1[i] % skewMorphism.d;
         set.insert(index);
     }
@@ -921,11 +921,94 @@ PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
     return true;
 }
 
+PROFILE Scalar powerToSkew(Scalar p, const SkewMorphism &ro) {
+    const auto &orbit1_ro = getOrbit1(ro);
+    for (const auto prime: numberCache[p].primes) {
+        if (p == prime) {
+            break;
+        }
+        Scalar period = 1;
+        while (orbit1_ro[period] % prime != 1) {
+            ++period;
+        }
+        if (ro.r % period != 0) {
+            continue;
+        }
+        bool ok = true;
+        for (std::size_t i = period + 1; i < orbit1_ro.size(); ++i) {
+            if ((orbit1_ro[i] - orbit1_ro[i - period]) % prime != 0) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        const auto modulo = ro.pi[0] % period;//TODO: copy-paste, zjednotit
+        bool all = true;
+        for (std::size_t j = 1; j < ro.pi.size(); ++j) {
+            if (ro.pi[j] % period != modulo) {
+                all = false;
+                break;
+            }
+        }
+        if (all) {
+            return prime;
+        }
+    }
+    return p;
+}
+
+PROFILE const SkewMorphism &getSkewByIndex(const Number &number, std::size_t index) {
+    if (index < number.automorphisms.size()) {
+        return number.automorphisms[index];
+    }
+    index -= number.automorphisms.size();
+    if (index < number.properCosetPreserving.size()) {
+        return number.properCosetPreserving[index];
+    }
+    index -= number.properCosetPreserving.size();
+    return number.properNonPreserving[index];
+}
+
+PROFILE bool isPowerOf(const SkewMorphism &base, Scalar exponent, const SkewMorphism &power) {
+    for (const auto &orbit: power.permutation.orbits) {
+        Scalar oldO = orbit[0];
+        for (std::size_t i = 1; i < orbit.size(); ++i) {
+            const auto o = orbit[i];
+            if (apply(base, exponent, oldO) != o) {
+                return false;
+            }
+            oldO = o;
+        }
+        if (apply(base, exponent, oldO) != orbit[0]) {
+            return false;
+        }
+    }
+    for (const auto &place: power.permutation.places) {//TODO: fixed points as part of Permutation
+        if (place.orbitIndex == -1 && apply(base, exponent, place.indexOnOrbit) != place.indexOnOrbit) {
+            return false;
+        }
+    }
+    return true;
+}
+
+PROFILE Function inverse(const Function &function, Scalar n) {
+    Function result(n, -1);
+    for (Scalar x = 0; x < function.size(); ++x) {
+        result[function[x]] = x;
+    }
+    return result;
+}
+
+//TODO: zoradit podla radu
+//TODO: kanonicke poradie autov, aj cosetov
+
 //TODO: nemozu nejake nasobenia scitania pretiect?
 PROFILE Scalar computeProperNotPreserving(Number &number) {
     Scalar nskew = 0;
 
-    std::unordered_set<std::string> aaaaa;
+    std::unordered_set<std::string> aaaaa;//TODO: premenuj
     const auto n = number.n;
     const auto number_nphi = numberCache[n * number.phi];
 
@@ -982,100 +1065,159 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     continue;
                 }
 
-                std::vector<Index> free_x_index = ro.free_x;
-                std::vector<std::vector<Scalar>> free_x_values;
-                free_x_values.reserve(free_x_index.size());
-                std::size_t product = 1;
-                for (const auto index: free_x_index) {
-                    free_x_values.emplace_back();
-                    free_x_values.back().reserve(n_div_d);
-                    const auto modulo = ro.pi[index];
-                    for (Scalar value = modulo; value < n; value += d) {
-                        const auto orbitIndex = psi.permutation.places[value].orbitIndex;
-                        const auto orbitSize = orbitIndex == -1 ? 1 : psi.permutation.orbits[orbitIndex].size();
-                        if (orbitSize != psi.r) {
+                const auto exponent = powerToSkew(p, ro);
+                const auto p_exponent = p / exponent;
+
+                std::vector<std::size_t> possiblePowerIndices;
+                if (exponent == p) {
+                    possiblePowerIndices.push_back(psi_index);
+                } else {
+                    std::size_t skewCount = number.automorphisms.size() + number.properCosetPreserving.size() + number.properNonPreserving.size();
+                    for (std::size_t i = 0; i < skewCount; ++i) {
+                        const auto &skew = getSkewByIndex(number, i);
+                        if (psi.r * p_exponent != skew.r) {
                             continue;
                         }
-                        free_x_values.back().push_back(value);
+                        if (isPowerOf(skew, p_exponent, psi)) {
+                            possiblePowerIndices.push_back(i);
+                        }
                     }
-                    product *= free_x_values.back().size();
                 }
-                for (std::size_t product_index = 0; product_index < product; ++product_index) {
-                    std::vector<std::size_t> splitIndex;
-                    splitIndex.reserve(free_x_values.size());
-                    auto mutable_index = product_index;
-                    for (const auto &values: free_x_values) {
-                        const auto size = values.size();
-                        splitIndex.push_back(mutable_index % size);
-                        mutable_index /= size;
-                    }
-                    Orbit t(r, 0);
-                    t[0] = 1;
-//                    std::set<Scalar> orbitIndices;
-                    for (std::size_t i = 0; i < free_x_index.size(); ++i) {
-                        const auto index = free_x_index[i];
-                        const auto valueIndex = splitIndex[i];
-                        const auto value = free_x_values[i][valueIndex];
-                        t[index] = value;
-                        //TODO: pozri size_t
-                        //TODO: vyplnit celu orbitu
 
-//                        orbitIndices.insert(psi.permutation.places[value].orbitIndex == -1 ? -(value + 1) : psi.permutation.places[value].orbitIndex);
-                    }
-//                    if (orbitIndices.size() != free_x_index.size()) {
-//                        continue;
-//                    }
+                const auto inverse_ro_pi = inverse(ro.pi, d);
+                for (const auto power_index: possiblePowerIndices) {
+                    const auto power = getSkewByIndex(number, power_index);
 
-                    const Function &pi = orbit1_ro;
-                    Function function = computeFunctionFromPsiPi(p, psi, t, pi);
-                    if (function.empty()) {
-                        continue;
+                    const auto &power_orbits = power.permutation.orbits;
+                    std::vector<std::vector<OrbitPlace>> moduloOrbits(exponent);
+                    for (Index i = 0; i < power.max_orbits; ++i) {
+                        const auto &orbit = power_orbits[i];
+                        const auto modulo = orbit[0] % d;
+                        auto index = inverse_ro_pi[modulo];
+                        if (index == -1) {
+                            continue;
+                        }
+                        bool all = true;
+                        for (std::size_t j = 1; j < orbit.size(); ++j) {
+                            index += exponent;
+                            if (index >= p) index -= p;
+                            if (orbit[j] % d != ro.pi[index]) {
+                                all = false;
+                                break;
+                            }
+                        }
+                        if (!all) {
+                            continue;
+                        }
+                        index = inverse_ro_pi[modulo];
+                        const auto smallestIndex = index % exponent;
+                        const auto offset = index < exponent ? 0 : p_exponent - index / exponent;
+                        moduloOrbits[smallestIndex].push_back(OrbitPlace{.orbitIndex = i, .indexOnOrbit = offset});
                     }
-                    if (!isPermutation(function)) {
-                        continue;
+                    bool allModulos = true;
+                    for (Index i = 0; i < exponent; ++i) {
+                        if (moduloOrbits[i].empty()) {
+                            allModulos = false;
+                            break;
+                        }
                     }
-
-                    Orbit orbit1 = computeOrbit1(function, r);
-
-                    if (orbit1.size() != r) {
-                        continue;
-                    }
-
-                    if (!checkFirstPMod(ro, orbit1)) {
-                        continue;
-                    }
-                    Function function2 = computeFunction(n, pi, orbit1);//TODO: ktore checky treba robit?
-                    if (function2.empty()) {
-                        continue;
-                    }
-                    if (!compareFunctions(function, function2)) {
-                        continue;
-                    }
-                    if (!checkPsiCycles(p, psi, orbit1)) {
-                        continue;
-                    }
-                    SkewMorphism phi;
-                    phi.n = n;
-                    phi.d = d;
-                    phi.h = t[1] - 1;
-                    phi.r = r;
-                    phi.permutation.places.resize(n);
-                    computeOrbits(phi, function);
-                    phi.pi = pi;
-                    if (!isSkewMorphism(phi, function)) {
+                    if (!allModulos) {
                         continue;
                     }
 
-                    std::string string = to_string(phi);
-                    if (aaaaa.find(string) != aaaaa.end()) {
-                        continue;
+
+                    std::vector<Index> free_x_index;
+                    std::set<Index> set;
+                    for (const auto index: ro.free_x) {
+                        set.insert(index % exponent);
                     }
+                    std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
-                    computeMaxOrbits(phi);
+                    std::vector<std::vector<Scalar>> free_x_values;
+                    free_x_values.reserve(free_x_index.size());
+                    std::size_t product = 1;
+                    for (const auto index: free_x_index) {
+                        free_x_values.emplace_back();
+//                        free_x_values.back().reserve(n_div_d);
+                        for (const auto moduloOrbitPlace: moduloOrbits[index]) {
+                            const auto &orbit = power_orbits[moduloOrbitPlace.orbitIndex];
+                            for (std::size_t i = moduloOrbitPlace.indexOnOrbit; i < orbit.size(); i += p_exponent) {
+                                free_x_values.back().push_back(orbit[i]);
+                            }
+                        }
+                        product *= free_x_values.back().size();
+                    }
+                    for (std::size_t product_index = 0; product_index < product; ++product_index) {
+                        std::vector<std::size_t> splitIndex;
+                        splitIndex.reserve(free_x_values.size());
+                        auto mutable_index = product_index;
+                        for (const auto &values: free_x_values) {
+                            const auto size = values.size();
+                            splitIndex.push_back(mutable_index % size);
+                            mutable_index /= size;
+                        }
+                        Orbit t(r, 0);
+                        t[0] = 1;
+                        for (std::size_t i = 0; i < free_x_index.size(); ++i) {
+                            const auto index = free_x_index[i];
+                            const auto valueIndex = splitIndex[i];
+                            const auto value = free_x_values[i][valueIndex];
+                            t[index] = value;
+                            //TODO: pozri size_t
+                            //TODO: vyplnit celu orbitu
+                        }
 
-                    aaaaa.insert(string);
-                    number.properNonPreserving.emplace_back(std::move(phi));
-                    ++nskew;
+                        const Function &pi = orbit1_ro;
+                        Function function = computeFunctionFromPsiPi(exponent, power, t, pi);
+                        if (function.empty()) {
+                            continue;
+                        }
+                        if (!isPermutation(function)) {
+                            continue;
+                        }
+
+                        Orbit orbit1 = computeOrbit1(function, r);
+
+                        if (orbit1.size() != r) {
+                            continue;
+                        }
+
+                        if (!checkFirstPMod(ro, orbit1)) {
+                            continue;
+                        }
+                        Function function2 = computeFunction(n, pi, orbit1);//TODO: ktore checky treba robit?
+                        if (function2.empty()) {
+                            continue;
+                        }
+                        if (!compareFunctions(function, function2)) {
+                            continue;
+                        }
+                        if (!checkPsiCycles(exponent, power, orbit1)) {
+                            continue;
+                        }
+                        SkewMorphism phi;
+                        phi.n = n;
+                        phi.d = d;
+                        phi.h = t[1] - 1;
+                        phi.r = r;
+                        phi.permutation.places.resize(n);
+                        computeOrbits(phi, function);
+                        phi.pi = pi;
+                        if (!isSkewMorphism(phi, function)) {
+                            continue;
+                        }
+
+                        std::string string = to_string(phi);
+                        if (aaaaa.find(string) != aaaaa.end()) {
+                            continue;
+                        }
+
+                        computeMaxOrbits(phi);
+
+                        aaaaa.insert(string);
+                        number.properNonPreserving.emplace_back(std::move(phi));
+                        ++nskew;
+                    }
                 }
             }
         }
