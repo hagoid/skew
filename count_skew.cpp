@@ -1014,6 +1014,27 @@ PROFILE Function inverse(const Function &function, Scalar n) {
     return result;
 }
 
+PROFILE void initializeSplitIndex(std::vector<std::size_t> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
+    for (std::size_t i = 0; i <= values.size(); ++i) {
+        splitIndex[i] = 0;
+    }
+}
+
+PROFILE bool isValidSplitIndex(std::vector<std::size_t> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
+    return splitIndex[values.size()] == 0;
+}
+
+PROFILE void incrementSplitIndex(std::vector<std::size_t> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
+    ++splitIndex[0];
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (splitIndex[i] < values[i].size()) {
+            break;
+        }
+        splitIndex[i] = 0;
+        ++splitIndex[i + 1];
+    }
+}
+
 //TODO: zoradit podla radu
 //TODO: kanonicke poradie autov, aj cosetov
 
@@ -1033,6 +1054,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
     Function function(n, 0);
     std::vector<std::size_t> possiblePowerIndices;
     std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
+    std::vector<std::size_t> splitIndex(n + 1, 0);
 
     for (const auto m: number_nphi.divisors) {
         //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
@@ -1165,7 +1187,6 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
                     std::vector<std::vector<Scalar>> free_x_values;
                     free_x_values.reserve(free_x_index.size());
-                    std::size_t product = 1;
                     for (const auto index: free_x_index) {
                         free_x_values.emplace_back();
 //                        free_x_values.back().reserve(n_div_d);
@@ -1175,17 +1196,9 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                                 free_x_values.back().push_back(orbit[i]);
                             }
                         }
-                        product *= free_x_values.back().size();
                     }
-                    for (std::size_t product_index = 0; product_index < product; ++product_index) {
-                        std::vector<std::size_t> splitIndex;
-                        splitIndex.reserve(free_x_values.size());
-                        auto mutable_index = product_index;
-                        for (const auto &values: free_x_values) {
-                            const auto size = values.size();
-                            splitIndex.push_back(mutable_index % size);
-                            mutable_index /= size;
-                        }
+
+                    for (initializeSplitIndex(splitIndex, free_x_values); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(splitIndex, free_x_values)) {
                         for (std::size_t i = 0; i < free_x_index.size(); ++i) {
                             const auto index = free_x_index[i];
                             const auto valueIndex = splitIndex[i];
