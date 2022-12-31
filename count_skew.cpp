@@ -787,26 +787,27 @@ PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& fu
     return good;
 }
 
-PROFILE Function computeFunctionFromPsiPi(const Scalar p, const SkewMorphism &psi, Orbit &t, const Function &pi) {//TODO: inputs p, phi...
+PROFILE void periodicallyFillOrbit(Scalar p, const SkewMorphism &psi, Orbit &t) {
     const auto n = psi.n;
+    const std::size_t orbitSize = psi.r;
     for (std::size_t i = 0; i < p; ++i) {
         const auto e = t[i];
         if (e == 0) {
+            for (std::size_t j = p + i; j < t.size(); j += p) {
+                t[j] = 0;
+            }
             continue;
         }
         const auto &place = psi.permutation.places[e];
         const auto &orbit = psi.permutation.orbits[place.orbitIndex];
-        const auto increment = [orbitSize = psi.r](auto &index) {
-            index += 1;
-            if (index == orbitSize) index = 0;
-        };
-        auto index = place.indexOnOrbit;
+
+        std::size_t index = place.indexOnOrbit;
         for (std::size_t j = p + i; j < t.size(); j += p) {
-            increment(index);
+            ++index;
+            if (index == orbitSize) index = 0;
             t[j] = orbit[index];
         }
     }
-    return computeFunction(n, pi, t);
 }
 
 PROFILE bool isPermutation(Function &function) {//TODO: spojit s pocitanim funkcie
@@ -850,53 +851,65 @@ PROFILE void computeOrbits(SkewMorphism &skewMorphism, const Function &function)
     }
 }
 
-PROFILE Orbit computeOrbit1(const Function &function, Scalar r) {//TODO: inputs outputs
-    Orbit orbit1;
-    orbit1.reserve(r);
+PROFILE bool computeOrbit1(const Function &function, Orbit &orbit1) {
     Scalar c = 1;
+    std::size_t index = 0;
     do {
-        orbit1.push_back(c);
+        orbit1[index] = c;
         c = function[c];
-    } while (c != 1);
-    return orbit1;
+        ++index;
+    } while (c != 1 && index < orbit1.size());
+    return c == 1 && index == orbit1.size();
 }
 
-PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1) {//TODO: inputs
-    Function function(n, 0);
+PROFILE bool computeFunction(Scalar n, const Function &pi, const Orbit &orbit1, Function &function) {
     Scalar oldO = 1;
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
         if (o != 0 && oldO != 0) {
-            function[oldO] = o;
+            function[oldO] = -o;
         }
         oldO = o;
     }
     if (oldO != 0) {
-        function[oldO] = 1;
+        function[oldO] = -1;
     }
 
     for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
         for (std::size_t i2 = 1; i2 <= pi.size(); ++i2) {
             const auto i = i1 + i2;
             if (i >= n) {
-                return function;
+                return true;
             }
             auto value = function[i - 1] + orbit1[pi[i2 - 1]];
             if (value >= n) value -= n;
 
-            if (function[i] == 0) {
-                function[i] = value;
-            } else if (function[i] != value) {
-                return {};
+            if (function[i] < 0 && function[i] != -value) {
+                for (const auto o: orbit1) {
+                    function[o] = 0;
+                }
+                return false;
             }
+            function[i] = value;
         }
     }
-    return function;
+    return true;
 }
 
-PROFILE bool compareFunctions(const Function &function, const Function &function2) {
-    for (std::size_t i = 0; i < function.size(); ++i) {
-        if (function[i] != function2[i]) {
+PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1) {
+    Function function(n, 0);
+    if (computeFunction(n, pi, orbit1, function)) {
+        return function;
+    }
+    return {};
+}
+
+PROFILE bool compareOrbits(const Orbit &sparseOrbit, const Orbit &orbit2) {
+    for (std::size_t i = 0; i < sparseOrbit.size(); ++i) {
+        if (sparseOrbit[i] == 0) {
+            continue;
+        }
+        if (sparseOrbit[i] != orbit2[i]) {
             return false;
         }
     }
@@ -1017,6 +1030,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
     auto counter = 0;
 
+    Function function(n, 0);
     for (const auto m: number_nphi.divisors) {
         //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
         ++counter;
@@ -1028,6 +1042,10 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
             continue;
         }
         const auto r = m;
+
+        Orbit t(r, 0);
+        t[0] = 1;
+        Orbit orbit1(r, 0);
         for (std::size_t ro_index = 0; ro_index < number_m.nproper; ++ro_index) {
             //printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
             const auto &ro = ro_index < number_m.properCosetPreserving.size() ? number_m.properCosetPreserving[ro_index] : number_m.properNonPreserving[ro_index - number_m.properCosetPreserving.size()];
@@ -1127,11 +1145,17 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
 
                     std::vector<Index> free_x_index;
+                    std::vector<Index> non_free_x_index;
                     std::set<Index> set;
                     for (const auto index: ro.free_x) {
                         set.insert(index % exponent);
                     }
                     std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
+                    for (Index i = 2; i < exponent; ++i) {
+                        if (set.find(i) == set.end()) {
+                            non_free_x_index.push_back(i);
+                        }
+                    }
 
                     std::vector<std::vector<Scalar>> free_x_values;
                     free_x_values.reserve(free_x_index.size());
@@ -1156,40 +1180,35 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                             splitIndex.push_back(mutable_index % size);
                             mutable_index /= size;
                         }
-                        Orbit t(r, 0);
-                        t[0] = 1;
                         for (std::size_t i = 0; i < free_x_index.size(); ++i) {
                             const auto index = free_x_index[i];
                             const auto valueIndex = splitIndex[i];
                             const auto value = free_x_values[i][valueIndex];
                             t[index] = value;
                             //TODO: pozri size_t
-                            //TODO: vyplnit celu orbitu
                         }
+                        for (const auto index: non_free_x_index) {
+                            t[index] = 0;
+                        }
+                        periodicallyFillOrbit(exponent, power, t);
 
                         const Function &pi = orbit1_ro;
-                        Function function = computeFunctionFromPsiPi(exponent, power, t, pi);
-                        if (function.empty()) {
+                        if (!computeFunction(n, pi, t, function)) {
                             continue;
                         }
                         if (!isPermutation(function)) {
                             continue;
                         }
 
-                        Orbit orbit1 = computeOrbit1(function, r);
-
-                        if (orbit1.size() != r) {
+                        if (!computeOrbit1(function, orbit1)) {
                             continue;
                         }
 
                         if (!checkFirstPMod(ro, orbit1)) {
                             continue;
                         }
-                        Function function2 = computeFunction(n, pi, orbit1);//TODO: ktore checky treba robit?
-                        if (function2.empty()) {
-                            continue;
-                        }
-                        if (!compareFunctions(function, function2)) {
+                        //TODO: ktore checky treba robit?
+                        if (!compareOrbits(t, orbit1)) {
                             continue;
                         }
                         if (!checkPsiCycles(exponent, power, orbit1)) {
