@@ -1031,6 +1031,9 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
     auto counter = 0;
 
     Function function(n, 0);
+    std::vector<std::size_t> possiblePowerIndices;
+    std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
+
     for (const auto m: number_nphi.divisors) {
         //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
         ++counter;
@@ -1086,7 +1089,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                 const auto exponent = powerToSkew(p, ro);
                 const auto p_exponent = p / exponent;
 
-                std::vector<std::size_t> possiblePowerIndices;
+                possiblePowerIndices.clear();
                 if (exponent == p) {
                     possiblePowerIndices.push_back(psi_index);
                 } else {
@@ -1107,7 +1110,10 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                     const auto power = getSkewByIndex(number, power_index);
 
                     const auto &power_orbits = power.permutation.orbits;
-                    std::vector<std::vector<OrbitPlace>> moduloOrbits(exponent);
+
+                    for (std::size_t i = 0; i < exponent; ++i) {
+                        moduloOrbits[i].clear();
+                    }
                     for (Index i = 0; i < power.max_orbits; ++i) {
                         const auto &orbit = power_orbits[i];
                         const auto modulo = orbit[0] % d;
