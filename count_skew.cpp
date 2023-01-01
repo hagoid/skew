@@ -1049,10 +1049,26 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
     const auto maxPrime = getMaxPrime(number);
     auto n_div_maxPrime = n / maxPrime;
 
+    std::vector<std::vector<std::vector<std::size_t>>> roots(number.npreserving);
+    for (std::size_t i = 0; i < roots.size(); ++i) {
+        auto &r = roots[i];
+        r.resize(n);
+        const auto &power = getSkewByIndex(number, i);
+        for (std::size_t j = 0; j < roots.size(); ++j) {
+            const auto &root = getSkewByIndex(number, j);
+            if (root.r % power.r != 0) {
+                continue;
+            }
+            const auto exponent = root.r / power.r;
+            if (isPowerOf(root, exponent, power)) {
+                r[exponent].push_back(j);
+            }
+        }
+    }
+
     auto counter = 0;
 
     Function function(n, 0);
-    std::vector<std::size_t> possiblePowerIndices;
     std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
     std::vector<std::size_t> splitIndex(n + 1, 0);
 
@@ -1111,21 +1127,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                 const auto exponent = powerToSkew(p, ro);
                 const auto p_exponent = p / exponent;
 
-                possiblePowerIndices.clear();
-                if (exponent == p) {
-                    possiblePowerIndices.push_back(psi_index);
-                } else {
-                    std::size_t skewCount = number.automorphisms.size() + number.properCosetPreserving.size() + number.properNonPreserving.size();
-                    for (std::size_t i = 0; i < skewCount; ++i) {
-                        const auto &skew = getSkewByIndex(number, i);
-                        if (psi.r * p_exponent != skew.r) {
-                            continue;
-                        }
-                        if (isPowerOf(skew, p_exponent, psi)) {
-                            possiblePowerIndices.push_back(i);
-                        }
-                    }
-                }
+                const auto &possiblePowerIndices = roots[psi_index][p_exponent];
 
                 const auto inverse_ro_pi = inverse(ro.pi, d);
                 for (const auto power_index: possiblePowerIndices) {
@@ -1251,6 +1253,18 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         }
 
                         computeMaxOrbits(phi);
+
+                        for (std::size_t j = 0; j < roots.size(); ++j) {
+                            const auto &other = getSkewByIndex(number, j);
+                            if (phi.r % other.r != 0) {
+                                continue;
+                            }
+                            const auto e = phi.r / other.r;
+                            if (isPowerOf(phi, e, other)) {
+                                roots[j][e].push_back(roots.size());
+                            }
+                        }
+                        roots.emplace_back(n);
 
                         aaaaa.insert(string);
                         number.properNonPreserving.emplace_back(std::move(phi));
