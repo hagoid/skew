@@ -787,26 +787,18 @@ PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& fu
     return good;
 }
 
-PROFILE void periodicallyFillOrbit(Scalar p, const SkewMorphism &psi, Orbit &t) {
-    const auto n = psi.n;
+PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorphism &psi, Orbit &t) {
     const std::size_t orbitSize = psi.r;
-    for (std::size_t i = 0; i < p; ++i) {
-        const auto e = t[i];
-        if (e == 0) {
-            for (std::size_t j = p + i; j < t.size(); j += p) {
-                t[j] = 0;
-            }
-            continue;
-        }
-        const auto &place = psi.permutation.places[e];
-        const auto &orbit = psi.permutation.orbits[place.orbitIndex];
+    const auto e = t[i];
 
-        std::size_t index = place.indexOnOrbit;
-        for (std::size_t j = p + i; j < t.size(); j += p) {
-            ++index;
-            if (index == orbitSize) index = 0;
-            t[j] = orbit[index];
-        }
+    const auto &place = psi.permutation.places[e];
+    const auto &orbit = psi.permutation.orbits[place.orbitIndex];
+
+    std::size_t index = place.indexOnOrbit;
+    for (std::size_t j = p + i; j < t.size(); j += p) {
+        ++index;
+        if (index == orbitSize) index = 0;
+        t[j] = orbit[index];
     }
 }
 
@@ -1014,24 +1006,48 @@ PROFILE Function inverse(const Function &function, Scalar n) {
     return result;
 }
 
-PROFILE void initializeSplitIndex(std::vector<std::size_t> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
+PROFILE void initializeSplitIndex(Orbit &t, std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values, const std::vector<Index> &free_x_index, Scalar exponent, const SkewMorphism &power) {
     for (std::size_t i = 0; i <= values.size(); ++i) {
         splitIndex[i] = 0;
     }
+    t[0] = 1;
+    periodicallyFillOrbit(exponent, 0, power, t);
+    for (std::size_t i = 0; i < free_x_index.size(); ++i) {
+        const auto index = free_x_index[i];
+        const auto valueIndex = splitIndex[i];
+        const auto value = values[i][valueIndex];
+        t[index] = value;
+        //TODO: pozri size_t
+        periodicallyFillOrbit(exponent, index, power, t);
+    }
 }
 
-PROFILE bool isValidSplitIndex(std::vector<std::size_t> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
+PROFILE bool isValidSplitIndex(std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
     return splitIndex[values.size()] == 0;
 }
 
-PROFILE void incrementSplitIndex(std::vector<std::size_t> &splitIndex, const std::vector<std::vector<Scalar>> &values) {
+PROFILE void incrementSplitIndex(Orbit &t, std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values, const std::vector<Index> &free_x_index, Scalar exponent, const SkewMorphism &power) {
     ++splitIndex[0];
     for (std::size_t i = 0; i < values.size(); ++i) {
-        if (splitIndex[i] < values[i].size()) {
+        if (splitIndex[i] == 0 || splitIndex[i] == values[i].size()) {
+            if (splitIndex[i] == values[i].size()) {
+                splitIndex[i] = -static_cast<Index>(values[i].size());
+            }
+            ++splitIndex[i + 1];
+        } else {
+            const auto index = free_x_index[i];
+            const auto valueIndex = splitIndex[i] >= 0 ? splitIndex[i] :  -(splitIndex[i] + 1);
+            const auto value = values[i][valueIndex];
+            t[index] = value;
+            periodicallyFillOrbit(exponent, index, power, t);
             break;
         }
-        splitIndex[i] = 0;
-        ++splitIndex[i + 1];
+    }
+}
+
+PROFILE void clearOrbit(Orbit &orbit) {
+    for (auto &o: orbit) {
+        o = 0;
     }
 }
 
@@ -1070,7 +1086,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
     Function function(n, 0);
     std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
-    std::vector<std::size_t> splitIndex(n + 1, 0);
+    std::vector<Index> splitIndex(n + 1, 0);
 
     for (const auto m: number_nphi.divisors) {
         //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
@@ -1129,6 +1145,14 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
                 const auto &possiblePowerIndices = roots[psi_index][p_exponent];
 
+                std::vector<Index> free_x_index;
+                std::set<Index> set;
+                for (const auto index: ro.free_x) {
+                    set.insert(index % exponent);
+                }
+                std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
+
+                clearOrbit(t);
                 const auto inverse_ro_pi = inverse(ro.pi, d);
                 for (const auto power_index: possiblePowerIndices) {
                     const auto power = getSkewByIndex(number, power_index);
@@ -1173,20 +1197,6 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         continue;
                     }
 
-
-                    std::vector<Index> free_x_index;
-                    std::vector<Index> non_free_x_index;
-                    std::set<Index> set;
-                    for (const auto index: ro.free_x) {
-                        set.insert(index % exponent);
-                    }
-                    std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
-                    for (Index i = 2; i < exponent; ++i) {
-                        if (set.find(i) == set.end()) {
-                            non_free_x_index.push_back(i);
-                        }
-                    }
-
                     std::vector<std::vector<Scalar>> free_x_values;
                     free_x_values.reserve(free_x_index.size());
                     for (const auto index: free_x_index) {
@@ -1200,19 +1210,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         }
                     }
 
-                    for (initializeSplitIndex(splitIndex, free_x_values); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(splitIndex, free_x_values)) {
-                        for (std::size_t i = 0; i < free_x_index.size(); ++i) {
-                            const auto index = free_x_index[i];
-                            const auto valueIndex = splitIndex[i];
-                            const auto value = free_x_values[i][valueIndex];
-                            t[index] = value;
-                            //TODO: pozri size_t
-                        }
-                        for (const auto index: non_free_x_index) {
-                            t[index] = 0;
-                        }
-                        periodicallyFillOrbit(exponent, power, t);
-
+                    for (initializeSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power)) {
                         const Function &pi = orbit1_ro;
                         if (!computeFunction(n, pi, t, function)) {
                             continue;
