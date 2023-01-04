@@ -1241,12 +1241,13 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         phi.permutation.places.resize(n);
                         computeOrbits(phi, function);
                         phi.pi = pi;
-                        if (!isSkewMorphism(phi, function)) {
-                            continue;
-                        }
 
                         std::string string = to_string(phi);
                         if (aaaaa.find(string) != aaaaa.end()) {
+                            continue;
+                        }
+
+                        if (!isSkewMorphism(phi, function)) {
                             continue;
                         }
 
