@@ -4,9 +4,10 @@
 #include <cstdio>
 #include <ostream>
 #include <set>
-#include <vector>
 #include <sstream>
+#include <string_view>
 #include <unordered_set>
+#include <vector>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -42,6 +43,11 @@ struct SkewMorphism {
     Scalar h = 0;
     Scalar r = 0;
     Scalar max_orbits = 0;
+};
+
+struct CompactSkewMorphism {
+    Orbit orbit1;
+    Function pi;
 };
 
 PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
@@ -1019,6 +1025,31 @@ PROFILE void clearOrbit(Orbit &orbit) {
     }
 }
 
+template <typename T>
+PROFILE std::size_t hash_vector(const std::vector<T> &vector) {
+    std::string_view bytestring(reinterpret_cast<const char *>(vector.data()), vector.size() * sizeof(T));
+    return std::hash<std::string_view>{}(bytestring);
+}
+
+template <typename T, std::size_t N>
+PROFILE std::size_t hash_array(const std::array<T, N> &array) {
+    std::string_view bytestring(reinterpret_cast<const char *>(array.data()), N * sizeof(T));
+    return std::hash<std::string_view>{}(bytestring);
+}
+
+struct HashCompact {
+    PROFILE std::size_t operator()(const CompactSkewMorphism &compactSkew) const {
+        std::array<std::size_t, 2> sub_hash = {hash_vector(compactSkew.orbit1), hash_vector(compactSkew.pi)};
+        return hash_array(sub_hash);
+    }
+};
+
+struct EqualCompact {
+    PROFILE bool operator()(const CompactSkewMorphism &lhs, const CompactSkewMorphism &rhs) const {
+        return lhs.orbit1 == rhs.orbit1 && lhs.pi == rhs.pi;
+    }
+};
+
 //TODO: zoradit podla radu
 //TODO: kanonicke poradie autov, aj cosetov
 
@@ -1026,7 +1057,7 @@ PROFILE void clearOrbit(Orbit &orbit) {
 PROFILE Scalar computeProperNotPreserving(Number &number) {
     Scalar nskew = 0;
 
-    std::unordered_set<std::string> aaaaa;//TODO: premenuj
+    std::unordered_set<CompactSkewMorphism, HashCompact, EqualCompact> foundSkews;
     const auto n = number.n;
     const auto number_nphi = numberCache[n * number.phi];
 
@@ -1056,6 +1087,8 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
     std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
     std::vector<Index> splitIndex(n + 1, 0);
 
+    CompactSkewMorphism compactSkewMorphism;
+
     for (const auto m: number_nphi.divisors) {
         //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
         ++counter;
@@ -1070,7 +1103,9 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
 
         Orbit t(r, 0);
         t[0] = 1;
-        Orbit orbit1(r, 0);
+        Orbit &orbit1 = compactSkewMorphism.orbit1;
+        orbit1.clear();
+        orbit1.resize(r, 0);
         for (std::size_t ro_index = 0; ro_index < number_m.nproper; ++ro_index) {
             //printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
             const auto &ro = ro_index < number_m.properCosetPreserving.size() ? number_m.properCosetPreserving[ro_index] : number_m.properNonPreserving[ro_index - number_m.properCosetPreserving.size()];
@@ -1091,6 +1126,9 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
             const auto ord_psi = m / p;
             
             const auto &orbit1_ro = getOrbit1(ro);
+
+            compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
+
             for (std::size_t psi_index = 0; psi_index < number.npreserving; ++psi_index) {
                 //printf("\r(%d / %ld) x (%ld / %d) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper, psi_index, number.npreserving);
                 const auto &psi = psi_index < number.automorphisms.size() ? number.automorphisms[psi_index] : number.properCosetPreserving[psi_index - number.automorphisms.size()];
@@ -1201,6 +1239,10 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         if (!checkPsiCycles(exponent, power, orbit1)) {
                             continue;
                         }
+
+                        if (foundSkews.find(compactSkewMorphism) != foundSkews.end()) {
+                            continue;
+                        }
                         SkewMorphism phi;
                         phi.n = n;
                         phi.d = d;
@@ -1208,11 +1250,6 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         phi.r = r;
                         computeOrbits(phi, function);
                         phi.pi = pi;
-
-                        std::string string = to_string(phi);
-                        if (aaaaa.find(string) != aaaaa.end()) {
-                            continue;
-                        }
 
                         if (!isSkewMorphism(phi, function)) {
                             continue;
@@ -1232,7 +1269,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
                         }
                         roots.emplace_back(n);
 
-                        aaaaa.insert(string);
+                        foundSkews.insert(compactSkewMorphism);
                         number.properNonPreserving.emplace_back(std::move(phi));
                         ++nskew;
                     }
@@ -1241,7 +1278,7 @@ PROFILE Scalar computeProperNotPreserving(Number &number) {
         }
     }
     //printf("\r");
-//    printf("%d %ld\n", n, aaaaa.size());
+//    printf("%d %ld\n", n, foundSkews.size());
 
     return nskew;
 }
