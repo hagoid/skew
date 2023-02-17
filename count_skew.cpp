@@ -1113,8 +1113,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
         }
     }
 
-    auto counter = 0;
-
     Function function(n, 0);
     std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
     std::vector<Index> splitIndex(n + 1, 0);
@@ -1122,8 +1120,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
     CompactSkewMorphism compactSkewMorphism;
 
     for (const auto m: number_nphi.divisors) {
-        //printf("\r(%d / %ld) ", counter, number_nphi.divisors.size());
-        ++counter;
         if (m >= n) {
             continue;
         }
@@ -1139,7 +1135,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
         orbit1.clear();
         orbit1.resize(r, 0);
         for (std::size_t ro_index = 0; ro_index < getProperSkewCount(number_m.skewMorphisms); ++ro_index) {
-            //printf("\r(%d / %ld) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper);
             const auto &ro = getProperSkewByIndex(number_m.skewMorphisms, ro_index);
 
             const auto d = ro.r;
@@ -1162,7 +1157,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
             compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
 
             for (std::size_t psi_index = 0; psi_index < getPreservingSkewCount(number.skewMorphisms); ++psi_index) {
-                //printf("\r(%d / %ld) x (%ld / %d) x (%ld / %d) ", counter, number_nphi.divisors.size(), ro_index, number_m.nproper, psi_index, number.npreserving);
                 const auto &psi = getPreservingSkewByIndex(number.skewMorphisms, psi_index);
 
                 if (psi.h == 0) {
