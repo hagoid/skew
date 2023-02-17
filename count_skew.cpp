@@ -1091,7 +1091,7 @@ struct EqualCompact {
 PROFILE void computeProperNotPreserving(Number &number) {
     std::unordered_set<CompactSkewMorphism, HashCompact, EqualCompact> foundSkews;
     const auto n = number.n;
-    const auto number_nphi = numberCache[n * number.phi];
+    const auto number_nlambda = numberCache[n * number.lambda];
 
     const auto maxPrime = getMaxPrime(number);
     auto n_div_maxPrime = n / maxPrime;
@@ -1119,7 +1119,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
     CompactSkewMorphism compactSkewMorphism;
 
-    for (const auto m: number_nphi.divisors) {
+    for (const auto m: number_nlambda.divisors) {
         if (m >= n) {
             continue;
         }
