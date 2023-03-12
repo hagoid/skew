@@ -45,6 +45,8 @@ struct SkewMorphism {
     Scalar r = 0;
     Scalar s = 0;
     Scalar max_orbits = 0;
+    bool inverseOrbit = false;
+    bool powerOfInverseOrbit = false;
 };
 
 struct CompactSkewMorphism {
@@ -59,7 +61,7 @@ PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
     return skewMorphism.permutation.orbits[0];
 }
 
-PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj free_x rata a shrinkuje
+PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj free_x rata a shrinkuje a inverseOrbituje
     auto &orbits = skewMorphism.permutation.orbits;
     if (orbits.empty()) {
         skewMorphism.max_orbits = skewMorphism.permutation.places.size();
@@ -76,6 +78,13 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat es
         set.insert(index);
     }
     std::copy(set.begin(), set.end(), std::back_inserter(skewMorphism.free_x));
+
+    const auto inverse1 = skewMorphism.n - 1;
+    for (const auto o: orbit1) {
+        if (o == inverse1) {
+            skewMorphism.inverseOrbit = true;
+        }
+    }
 
     skewMorphism.permutation.orbits.shrink_to_fit();
     for (auto &orbit: skewMorphism.permutation.orbits) {
@@ -1072,7 +1081,7 @@ PROFILE Scalar powerToSkew(Scalar p, const SkewMorphism &ro) {
     return p;
 }
 
-PROFILE const SkewMorphism &getSkewByIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {
+PROFILE SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index) {
     if (index < skewMorphisms.automorphisms.size()) {
         return skewMorphisms.automorphisms[index];
     }
@@ -1297,12 +1306,15 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
 
 //            if (phi2.h % phi2.d != 0) {
                 for (std::size_t j = 0; j < roots.size(); ++j) {
-                    const auto &other = getSkewByIndex(number.skewMorphisms, j);
+                    auto &other = getSkewByIndex(number.skewMorphisms, j);
                     if (phi2.r % other.r != 0) {
                         continue;
                     }
                     const auto e = phi2.r / other.r;
                     if (isPowerOf(phi2, e, other)) {
+                        if (phi2.inverseOrbit) {
+                            other.powerOfInverseOrbit = true;
+                        }
                         roots[j][e].push_back(roots.size());
                     }
                 }
@@ -1331,7 +1343,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
     for (std::size_t i = 0; i < roots.size(); ++i) {
         auto &r = roots[i];
         r.resize(n);
-        const auto &power = getSkewByIndex(number.skewMorphisms, i);
+        auto &power = getSkewByIndex(number.skewMorphisms, i);
         for (std::size_t j = 0; j < roots.size(); ++j) {
             const auto &root = getSkewByIndex(number.skewMorphisms, j);
             if (root.r % power.r != 0) {
@@ -1339,6 +1351,9 @@ PROFILE void computeProperNotPreserving(Number &number) {
             }
             const auto exponent = root.r / power.r;
             if (isPowerOf(root, exponent, power)) {
+                if (root.inverseOrbit) {
+                    power.powerOfInverseOrbit = true;
+                }
                 r[exponent].push_back(j);
             }
         }
