@@ -1099,6 +1099,12 @@ PROFILE std::size_t getSkewCount(const SkewMorphisms &skewMorphisms) {
            skewMorphisms.properNonPreserving.size();
 }
 
+PROFILE std::size_t getClassesCount(const SkewMorphisms &skewMorphisms) {
+    return skewMorphisms.autoClasses.size() +
+           skewMorphisms.preservingClasses.size() +
+           skewMorphisms.nonPreservingClasses.size();
+}
+
 PROFILE const SkewMorphism &getPreservingSkewByIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {  // TODO: iterators
     if (index < skewMorphisms.automorphisms.size()) {
         return skewMorphisms.automorphisms[index];
@@ -1716,6 +1722,73 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     return true;
 }
 
+void printMato(std::ofstream &output, const SkewMorphism &skew) {
+    output << "\nSkew morphism " << to_string(skew);
+    output << "\n of order " << std::to_string(skew.r);
+    output << "\n with kernel of order " << std::to_string(skew.n / skew.d);
+    output << "\n and smallest kernel generator " << std::to_string(skew.d);
+    if (skew.d == 1) {
+        output << "\n and power function values [ 1 ]" << std::endl;
+    } else {
+        output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+    }
+}
+
+void printHtml(std::ofstream &output, const SkewMorphism &skew, Index index, const std::string &additionalClass, Scalar classSize) {
+    output << "\n<li class='skew " << additionalClass <<" n-" << skew.n << " d-" << skew.d << " h-" << skew.h << " r-" << skew.r << " s-" << skew.s;
+    if (skew.inverseOrbit) {
+        output << " inv-1";
+    }
+    if (skew.powerOfInverseOrbit) {
+        output << " pow-inv-1";
+    }
+    output << "' id='n-" << skew.n <<"-id-" << index << "'>";
+    output << "\nSkew morphsim class of size " << classSize;
+    output << "\n<ul>";
+    output << "\n<li>with representant " << to_string(skew);
+    output << "\n<li>of order " << std::to_string(skew.r) << "</li>";
+    output << "\n<li>with kernel of order " << std::to_string(skew.n / skew.d) << "</li>";
+    output << "\n<li>and smallest kernel generator " << std::to_string(skew.d) << "</li>";
+    if (skew.d == 1) {
+        output << "\n<li>and power function values [ 1 ]</li>" << std::endl;
+    } else {
+        output << "\n<li>and power function values [ " << to_string(skew.pi) << " ]</li>";
+    }
+    output << "\n</ul>" << std::endl;
+    output << "\n</li>" << std::endl;
+}
+
+void printHtml(std::ofstream &output, const Number &number) {
+    const auto n = number.n;
+    auto &skewMorphisms = number.skewMorphisms;
+    output << "\n<div class='n' id='n-" << n << "'>";
+    output << "\nn = " << n;
+    output << "\n<ul>";
+    output << "\n<li>Number of selected skew morphism classes of C_" << n << " is <span class='count'>0</span></li>";
+    output << "\n<li>Total number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms) << "</li>";
+    output << "\n<li>Total number of skew morphism classes of C_" << n << " is " << getClassesCount(skewMorphisms) << "</li>";
+    output << "\n<li>Total number of automorphisms of C_" << n << " is " << number.phi << "</li>";
+    output << "\n</ul>";
+
+    Index index = 0;
+    output << "\n<ol>";
+    for (const auto &c: number.skewMorphisms.autoClasses) {
+        const auto &skew = number.skewMorphisms.automorphisms[c[0]];
+        printHtml(output, skew, ++index, "auto", c.size());
+    }
+    for (const auto &c: number.skewMorphisms.preservingClasses) {
+        const auto &skew = number.skewMorphisms.properCosetPreserving[c[0]];
+        printHtml(output, skew, ++index, "coset", c.size());
+    }
+    for (const auto &c: number.skewMorphisms.nonPreservingClasses) {
+        const auto &skew = number.skewMorphisms.properNonPreserving[c[0]];
+        printHtml(output, skew, ++index, "other", c.size());
+    }
+    output << "\n</ol>";
+
+    output << "\n</div>" << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     Scalar N = 100;
     if (argc > 1) {
@@ -1791,31 +1864,19 @@ int main(int argc, char *argv[]) {
 //        std::sort(skewMorphisms.automorphisms.begin(), skewMorphisms.automorphisms.end(), [](const auto& lhs, const auto &rhs) { return lhs.h < rhs.h; });
 //
 //        for (const auto &skew: skewMorphisms.automorphisms) {
-//            output << "\nSkew morphism " << to_string(skew);
-//            output << "\n of order " << std::to_string(skew.r);
-//            output << "\n with kernel of order " << std::to_string(n / skew.d);
-//            output << "\n and smallest kernel generator " << std::to_string(skew.d);
-//            output << "\n and power function values [ 1 ]" << std::endl;
+//            printMato(output, skew);
 //        }
 //
 //        std::sort(skewMorphisms.properCosetPreserving.begin(), skewMorphisms.properCosetPreserving.end(), [](const auto& lhs, const auto &rhs) {return lhs.d < rhs.d; });
 //
 //        for (const auto &skew: skewMorphisms.properCosetPreserving) {
-//            output << "\nSkew morphism " << to_string(skew);
-//            output << "\n of order " << std::to_string(skew.r);
-//            output << "\n with kernel of order " << std::to_string(n / skew.d);
-//            output << "\n and smallest kernel generator " << std::to_string(skew.d);
-//            output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+//            printMato(output, skew);
 //        }
 //
 //        std::sort(skewMorphisms.properNonPreserving.begin(), skewMorphisms.properNonPreserving.end(), [](const auto& lhs, const auto &rhs) {return lhs.d < rhs.d; });
 //
 //        for (const auto &skew: skewMorphisms.properNonPreserving) {
-//            output << "\nSkew morphism " << to_string(skew);
-//            output << "\n of order " << std::to_string(skew.r);
-//            output << "\n with kernel of order " << std::to_string(n / skew.d);
-//            output << "\n and smallest kernel generator " << std::to_string(skew.d);
-//            output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+//            printMato(output, skew);
 //        }
 //
 //        output << "\nTotal number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms);
@@ -1823,6 +1884,39 @@ int main(int argc, char *argv[]) {
 //
 //        output << "\n.............................................................................." << std::endl;
 //    }
+
+    for (auto n = A; n <= N; ++n) {
+        std::ofstream output("../html/skew/" + std::to_string(n) + ".html");
+        const auto prev = n > 1 ? n - 1 : n;
+        output <<
+               "<html>\n"
+               "  <head>\n"
+               "    <script src='../jquery-3.6.4.min.js'></script>\n"
+               "    <script src='../script.js'></script>\n"
+               "    <link rel='stylesheet' href='../stylesheet.css'>\n"
+               "  </head>\n"
+               "  <body>\n"
+               "    <form>\n"
+               "      <a id='prev' href='" << prev  << ".html'>" << prev << "</a>\n"
+               "      <div>"
+               "        <input type='checkbox' id='checkbox-auto' name='checkbox-auto'><label for='checkbox-auto'>automorphisms</label>\n"
+               "        <input type='checkbox' id='checkbox-coset' name='checkbox-coset'><label for='checkbox-coset'>proper coset preserving</label>\n"
+               "        <input type='checkbox' id='checkbox-other' name='checkbox-other' checked><label for='checkbox-other'>proper coset non-preserving</label>\n"
+               "        <br />\n"
+               "        <input type='checkbox' id='checkbox-inv' name='checkbox-inv'><label for='checkbox-inv'>power of -1 on orbit 1</label>\n"
+               "      </div>\n"
+               "      <a id='next' href='" << n + 1 << ".html'>" << n + 1 << "</a>\n"
+               "    </form>\n"
+                ;
+        auto &number = numberCache[n];
+
+        printHtml(output, number);
+        output <<
+               "  </body>\n"
+               "</html>\n"
+                ;
+    }
+
 
     return 0;
 }

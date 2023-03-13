@@ -1,0 +1,25 @@
+.n {
+    padding: 1em 0;
+    border-bottom: dotted;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0 1em 0;
+    margin: 0;
+}
+
+ol {
+    margin: 0.5em;
+}
+
+form {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: white;
+}
+
+form div {
+    display: inline-block;
+}
