@@ -23,3 +23,11 @@ form {
 form div {
     display: inline-block;
 }
+
+#modulo {
+    margin-left: 5em;
+}
+
+.selected {
+    background-color: #f0f0f0;
+}

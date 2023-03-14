@@ -920,6 +920,30 @@ std::string to_string(const SkewMorphism &skewMorphism) {
     return result;
 }
 
+std::string to_json(const Orbit &orbit) {
+    std::string result;
+    bool first = true;
+    result += "[";
+    for (const auto e: orbit) {
+        result += (first ? "" : ",") + std::to_string(e);
+        first = false;
+    }
+    result += "]";
+    return result;
+}
+
+std::string to_json(const SkewMorphism &skewMorphism) {
+    std::string result;
+    bool first = true;
+    result += "[";
+    for (const auto &orbit: skewMorphism.permutation.orbits) {
+        result += (first ? "" : ",") + to_json(orbit);
+        first = false;
+    }
+    result += "]";
+    return result;
+}
+
 PROFILE bool isSkewMorphism(const SkewMorphism &skewMorphism, const Function& function) {
     const auto n = skewMorphism.n;
     bool good = true;
@@ -1742,10 +1766,10 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, Index index, con
     if (skew.powerOfInverseOrbit) {
         output << " pow-inv-1";
     }
-    output << "' id='n-" << skew.n <<"-id-" << index << "'>";
-    output << "\nSkew morphsim class of size " << classSize;
+    output << "' id='n-" << skew.n <<"-id-" << index << "' data-repr='" << to_json(skew) << "'>";
+    output << "\nSkew morphsim class of size " << classSize << " <a class='link' href='#n-" << skew.n <<"-id-" << index << "'>#</a>";
     output << "\n<ul>";
-    output << "\n<li>with representant " << to_string(skew);
+    output << "\n<li class='repr'></li>";
     output << "\n<li>of order " << std::to_string(skew.r) << "</li>";
     output << "\n<li>with kernel of order " << std::to_string(skew.n / skew.d) << "</li>";
     output << "\n<li>and smallest kernel generator " << std::to_string(skew.d) << "</li>";
@@ -1754,15 +1778,37 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, Index index, con
     } else {
         output << "\n<li>and power function values [ " << to_string(skew.pi) << " ]</li>";
     }
+    output << "\n<li>and with periodicity " << std::to_string(quotient(skew).d) << "</li>";
+
     output << "\n</ul>" << std::endl;
     output << "\n</li>" << std::endl;
+}
+
+std::string factorizationString(Scalar n) {
+    if (n == 1) {
+        return "1";
+    }
+    std::string result;
+    const auto &number = numberCache[n];
+    for (std::size_t i = 0; i < number.primes.size(); ++i) {
+        const Scalar prime = number.primes[i];
+        const Scalar exponent = numberCache[number.powersOfPrimes[i]].divisors.size() - 1;
+        if (i > 0) {
+            result += "x";
+        }
+        result += std::to_string(prime);
+        if (exponent > 1) {
+            result += "^" + std::to_string(exponent);
+        }
+    }
+    return result;
 }
 
 void printHtml(std::ofstream &output, const Number &number) {
     const auto n = number.n;
     auto &skewMorphisms = number.skewMorphisms;
     output << "\n<div class='n' id='n-" << n << "'>";
-    output << "\nn = " << n;
+    output << "\nn = " << n << " = " << factorizationString(n);
     output << "\n<ul>";
     output << "\n<li>Number of selected skew morphism classes of C_" << n << " is <span class='count'>0</span></li>";
     output << "\n<li>Total number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms) << "</li>";
@@ -1896,14 +1942,16 @@ int main(int argc, char *argv[]) {
                "    <link rel='stylesheet' href='../stylesheet.css'>\n"
                "  </head>\n"
                "  <body>\n"
-               "    <form>\n"
+               "    <form action='javascript:void(0);'>\n"
                "      <a id='prev' href='" << prev  << ".html'>" << prev << "</a>\n"
                "      <div>"
-               "        <input type='checkbox' id='checkbox-auto' name='checkbox-auto'><label for='checkbox-auto'>automorphisms</label>\n"
-               "        <input type='checkbox' id='checkbox-coset' name='checkbox-coset'><label for='checkbox-coset'>proper coset preserving</label>\n"
-               "        <input type='checkbox' id='checkbox-other' name='checkbox-other' checked><label for='checkbox-other'>proper coset non-preserving</label>\n"
+               "        <input type='checkbox' id='checkbox-auto' name='auto'><label for='checkbox-auto'>automorphisms</label>\n"
+               "        <input type='checkbox' id='checkbox-coset' name='coset'><label for='checkbox-coset'>proper coset preserving</label>\n"
+               "        <input type='checkbox' id='checkbox-other' name='other' checked><label for='checkbox-other'>proper coset non-preserving</label>\n"
                "        <br />\n"
-               "        <input type='checkbox' id='checkbox-inv' name='checkbox-inv'><label for='checkbox-inv'>power of -1 on orbit 1</label>\n"
+               "        <input type='checkbox' id='checkbox-inv' name='inv'><label for='checkbox-inv'>power of -1 on orbit 1</label>\n"
+               "        <br />\n"
+               "        <input type='number' id='modulo' name='mod' value='" << n << "'> <label for='modulo'>modulo</label>\n"
                "      </div>\n"
                "      <a id='next' href='" << n + 1 << ".html'>" << n + 1 << "</a>\n"
                "    </form>\n"
