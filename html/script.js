@@ -48,9 +48,9 @@ let update = () => {
     $('.other').toggle(otherVisible)
     if (!invVisible) $('.inv-1,.pow-inv-1').hide()
     $('.n').countSelected()
-    $('li.skew').represent().linking()
+    $('.skew').represent().linking()
     if (selected) selected.toggleClass('selected', false)
-    selected = $(window.location.hash)
+    selected = $(window.location.hash + ",." + window.location.hash.split('#')[1])
     selected.toggleClass('selected', true)
 }
 
@@ -104,4 +104,21 @@ $(document).ready(() => {
             $('a#next')[0].click()
         }
     })
+    window.onhashchange = function() {
+        update()
+    }
 })
+
+const cyrb53 = (vector, seed = 0) => {
+    let h1 = 0xdeadbeef ^ seed,
+        h2 = 0x41c6ce57 ^ seed;
+    for (element of vector) {
+        h1 = Math.imul(h1 ^ element, 2654435761);
+        h2 = Math.imul(h2 ^ element, 1597334677);
+    }
+
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}

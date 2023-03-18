@@ -56,6 +56,7 @@ struct SkewMorphism {
     Scalar max_orbits = 0;
     bool inverseOrbit = false;
     bool powerOfInverseOrbit = false;
+    std::uint64_t hash;
 };
 
 template <typename T>
@@ -639,6 +640,46 @@ PROFILE SkewMorphism &powerOf(const SkewMorphism &skewMorphism, const std::pair<
     return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
 }
 
+PROFILE std::uint64_t cyrb53(const std::vector<Scalar> &vector, std::uint32_t seed = 0) {
+    std::uint32_t h1 = 0xdeadbeef ^ seed;
+    std::uint32_t h2 = 0x41c6ce57 ^ seed;
+    for (const auto element: vector) {
+        h1 = (h1 ^ element) * 2654435761;
+        h2 = (h2 ^ element) * 1597334677;
+    }
+
+    h1 = std::uint32_t((h1 ^ (h1 >> 16)) * 2246822507) ^ std::uint32_t((h2 ^ (h2 >> 13)) * 3266489909);
+    h2 = std::uint32_t((h2 ^ (h2 >> 16)) * 2246822507) ^ std::uint32_t((h1 ^ (h1 >> 13)) * 3266489909);
+
+    return 4294967296 * (2097151 & h2) + (h1 >> 0);
+}
+
+PROFILE std::vector<Scalar> toVector(const CompactSkewMorphism &skew, Scalar n) {
+    std::vector<Scalar> vector = skew.orbit1;
+    vector.push_back(n);
+    vector.insert(vector.end(), skew.pi.begin(), skew.pi.end());
+    return vector;
+}
+
+PROFILE std::vector<Scalar> toVector(const SkewMorphism &skew) {
+    return toVector(toCompact(skew), skew.n);
+}
+
+PROFILE std::uint64_t hash(const SkewMorphism &skew) {
+    return cyrb53(toVector(skew));
+}
+
+PROFILE void computeHashForClass(const Class &c, SkewMorphisms &skewMorphisms) {
+    auto &skews = skewMorphisms.skews;
+    const auto least = std::min_element(skews.begin() + c.begin, skews.begin() + c.end, [](const auto &lhs, const auto &rhs) {
+        return toVector(*lhs) < toVector(*rhs);
+    });
+    const auto h = hash(**least);
+    for (std::size_t i = c.begin; i < c.end; ++i) {
+        skews[i]->hash = h;
+    }
+}
+
 PROFILE void computeRoots(SkewMorphisms &skewMorphisms, Index index) {
     auto &skewMorphism = getSkewByIndex(skewMorphisms, index);
     if (skewMorphism.n > 1) {
@@ -759,6 +800,10 @@ PROFILE void sEquals1(const Scalar d, const Number &number_n_div_d, SkewMorphism
                                 addSkewMorphism(std::move(skew), skewMorphisms, newClass);  // TODO: zjednotit
                                 newClass = false;
                             }
+                        }
+                        if (!newClass) {
+                            auto &c = skewMorphisms.classes[2].back();
+                            computeHashForClass(c, skewMorphisms);
                         }
 //                        clear(number_n_h);
                     }
@@ -999,6 +1044,10 @@ PROFILE void computeAutomorphisms(Number &number) {
 
             addSkewMorphism(std::move(automorphism), number.skewMorphisms, newClass);
             newClass = false;
+        }
+        if (!newClass) {
+            auto &c = number.skewMorphisms.classes[s == one ? 0 : 1].back();
+            computeHashForClass(c, number.skewMorphisms);
         }
     }
 //    clear(number);
@@ -1356,6 +1405,8 @@ PROFILE void addSkewClassByRepresentant(const SkewMorphism &ro, const SkewMorphi
             addSkewMorphism(std::move(phi2), number.skewMorphisms, false);
         }
     }
+    auto &c = number.skewMorphisms.classes[phi.c].back();
+    computeHashForClass(c, number.skewMorphisms);
 }
 
 CompactSkewMorphism compactQuotient(const SkewMorphism &skew);
@@ -1875,6 +1926,8 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
 
             addSkewMorphism(std::move(skew2), skewMorphisms, false);
         }
+        auto &c = skewMorphisms.classes[skew.c].back();
+        computeHashForClass(c, skewMorphisms);
     }
     skewMorphisms.automorphismsEnd = skewMorphisms.skews.size();
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_coset.txt"};
@@ -1969,7 +2022,8 @@ void printMato(std::ofstream &output, const SkewMorphism &skew, bool old = false
     }
 }
 
-void printHtml(std::ofstream &output, const SkewMorphism &skew, Index index, const std::string &additionalClass, Scalar classSize) {
+void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::string &additionalClass, Scalar classSize) {
+    const auto &q = quotient(skew);
     output << "\n<li class='skew " << additionalClass <<" n-" << skew.n << " d-" << skew.d << " h-" << skew.h << " r-" << skew.r << " s-" << skew.s << " c-" << skew.c;
     if (skew.inverseOrbit) {
         output << " inv-1";
@@ -1977,25 +2031,31 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, Index index, con
     if (skew.powerOfInverseOrbit) {
         output << " pow-inv-1";
     }
-    output << "' id='n-" << skew.n <<"-id-" << index << "' data-repr='" << to_json(skew) << "'>";
-    output << "\nSkew morphsim class of size " << classSize << " <a class='link' href='#n-" << skew.n <<"-id-" << index << "'>#</a>";
-    output << "\n<ul>";
-    output << "\n<li class='repr'></li>";
-    output << "\n<li>of order " << std::to_string(skew.r) << "</li>";
-    output << "\n<li>with kernel of order " << std::to_string(skew.n / skew.d) << "</li>";
-    output << "\n<li>and smallest kernel generator " << std::to_string(skew.d) << "</li>";
-    if (skew.d == 1) {
-        output << "\n<li>and power function values [ 1 ]</li>" << std::endl;
-    } else {
-        output << "\n<li>and power function values [ " << to_string(skew.pi) << " ]</li>";
+    auto &number = numberCache[skew.n];
+    for (const auto &sub: q.preservingSubgroups) {
+        const auto &power = powerOf(skew, sub, number.skewMorphisms);
+        output << " roots-" << power.hash;
     }
-    output << "\n<li>and with periodicity " << std::to_string(quotient(skew).d) << "</li>";
+    output << "' id='" << skew.hash << "' data-repr='" << to_json(skew) << "' data-pi='" << to_json(skew.pi) << "'><pre>";
+    output << "\nSkew morphsim class of size " << classSize << " <a class='link' href='#" << skew.hash << "'>#</a>";
+    output << "\n  <span class='repr'></span>";
+    output << "\n  of order " << std::to_string(skew.r);
+    output << " <a href='?auto=true&coset=true&other=true&inv=true#roots-" << skew.hash << "'>&radic;</a>";
+    output << "\n  with kernel of order " << std::to_string(skew.n / skew.d);
+    output << "\n  and smallest kernel generator " << std::to_string(skew.d);
+    if (skew.d == 1) {
+        output << "\n  and power function values [ 1 ]";
+    } else {
+        output << "\n  and power function values [ " << to_string(skew.pi) << " ]";
+    }
+    output << " <a href='" << skew.r << ".html?auto=true&coset=true&other=true&inv=true#" << q.hash << "'>#</a>";
+    output << "\n  and with periodicity " << std::to_string(q.d);
 
-    output << "\n</ul>" << std::endl;
+    output << "\n\n</pre>" << std::endl;
     output << "\n</li>" << std::endl;
 }
 
-std::string factorizationString(Scalar n) {
+std::string factorizationHtml(Scalar n) {
     if (n == 1) {
         return "1";
     }
@@ -2005,11 +2065,11 @@ std::string factorizationString(Scalar n) {
         const Scalar prime = number.primes[i];
         const Scalar exponent = numberCache[number.powersOfPrimes[i]].divisors.size() - 1;
         if (i > 0) {
-            result += "x";
+            result += "&centerdot;";
         }
         result += std::to_string(prime);
         if (exponent > 1) {
-            result += "^" + std::to_string(exponent);
+            result += "<sup>" + std::to_string(exponent) + "</sup>";
         }
     }
     return result;
@@ -2019,30 +2079,28 @@ void printHtml(std::ofstream &output, const Number &number) {
     const auto n = number.n;
     auto &skewMorphisms = number.skewMorphisms;
     output << "\n<div class='n' id='n-" << n << "'>";
-    output << "\nn = " << n << " = " << factorizationString(n);
-    output << "\n<ul>";
-    output << "\n<li>Number of selected skew morphism classes of C_" << n << " is <span class='count'>0</span></li>";
-    output << "\n<li>Total number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms) << "</li>";
-    output << "\n<li>Total number of skew morphism classes of C_" << n << " is " << getClassesCount(skewMorphisms) << "</li>";
-    output << "\n<li>Total number of automorphisms of C_" << n << " is " << number.phi << "</li>";
-    output << "\n</ul>";
+    output << "\n<pre>";
+    output << "\nNumber of selected skew morphism classes of C_" << n << " is <span class='count'>0</span>";
+    output << "\nTotal number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms);
+    output << "\nTotal number of skew morphism classes of C_" << n << " is " << getClassesCount(skewMorphisms);
+    output << "\nTotal number of automorphisms of C_" << n << " is " << number.phi;
+    output << "\n</pre>";
 
-    Index index = 0;
     output << "\n<ol>";
     for (std::size_t i = 0; i < 2; ++i) {
         for (const auto &c: number.skewMorphisms.classes[i]) {
             const auto &skew = *number.skewMorphisms.skews[c.representant];
-            printHtml(output, skew, ++index, "auto", c.size());
+            printHtml(output, skew, "auto", c.size());
         }
     }
     for (const auto &c: number.skewMorphisms.classes[2]) {
         const auto &skew = *number.skewMorphisms.skews[c.representant];
-        printHtml(output, skew, ++index, "coset", c.size());
+        printHtml(output, skew, "coset", c.size());
     }
     for (std::size_t i = 3; i < number.skewMorphisms.classes.size(); ++i) {
         for (const auto &c: number.skewMorphisms.classes[i]) {
             const auto &skew = *number.skewMorphisms.skews[c.representant];
-            printHtml(output, skew, ++index, "other", c.size());
+            printHtml(output, skew, "other", c.size());
         }
     }
     output << "\n</ol>";
@@ -2160,6 +2218,7 @@ int main(int argc, char *argv[]) {
                "        <input type='checkbox' id='checkbox-inv' name='inv'><label for='checkbox-inv'>power of -1 on orbit 1</label>\n"
                "        <br />\n"
                "        <input type='number' id='modulo' name='mod' value='" << n << "'> <label for='modulo'>modulo</label>\n"
+               "        <h3>n = " << n << " = " << factorizationHtml(n) << "</h3>"
                "      </div>\n"
                "      <a id='next' href='" << n + 1 << ".html'>" << n + 1 << "</a>\n"
                "    </form>\n"

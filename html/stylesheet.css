@@ -1,16 +1,26 @@
 .n {
-    padding: 1em 0;
-    border-bottom: dotted;
+    padding: 0;
+    /*border-bottom: dotted;*/
 }
 
-ul {
+body {
+    margin-top: 0;
+}
+
+pre {
+    padding: 0;
+    margin: 1rem 0;
+    white-space: pre-wrap;
+}
+
+ul, ol {
     list-style-type: none;
-    padding: 0 1em 0;
+    padding: 0;
     margin: 0;
 }
 
 ol {
-    margin: 0.5em;
+    /*margin: 0.5em;*/
 }
 
 form {
@@ -18,6 +28,8 @@ form {
     top: 0;
     z-index: 999;
     background: white;
+    width: 100%;
+    text-align: center;
 }
 
 form div {
@@ -30,4 +42,12 @@ form div {
 
 .selected {
     background-color: #f0f0f0;
+}
+
+li {
+    scroll-margin-top: 10rem;
+}
+
+html {
+    font-family: monospace;
 }
