@@ -44,6 +44,7 @@ struct SkewMorphism {
     Scalar h = 0;
     Scalar r = 0;
     Scalar s = 0;
+    Scalar c = 0;
     Scalar max_orbits = 0;
     bool inverseOrbit = false;
     bool powerOfInverseOrbit = false;
@@ -645,6 +646,7 @@ PROFILE void sEquals1(const Scalar d, const Number &number_n_div_d, SkewMorphism
                                 skew.d = d;
                                 skew.h = orbit1[1] - 1;
                                 skew.s = 1;
+                                skew.c = 2;
                                 skew.r = n_h;
                                 for (Scalar id = 0; id < d; ++id) {
                                     skew.pi.push_back(powers[((coprime_e * id) % d) * step]);
@@ -805,6 +807,7 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
                                                 skew.d = d;
                                                 skew.h = orbit1[1] - 1;
                                                 skew.s = powers_s[coprime_s];
+                                                skew.c = 2;
                                                 skew.r = r;
                                                 for (Scalar id = 0; id < d; ++id) {
                                                     skew.pi.push_back(powers_e[((coprime_e * id) % d) * step]);
@@ -816,6 +819,7 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
                                                 ro.d = 1;
                                                 ro.h = skew.pi[1] - 1;
                                                 ro.s = skew.pi[1];
+                                                ro.c = 1;
                                                 ro.r = skew.d;
                                                 ro.pi = {1};
                                                 finish(ro, skew.pi);
@@ -887,6 +891,7 @@ PROFILE void computeAutomorphisms(Number &number) {
             automorphism.d = 1;
             automorphism.h = powers_s[coprime_s] - one;
             automorphism.s = powers_s[coprime_s];
+            automorphism.c = automorphism.h == 0 ? 0 : 1;
             automorphism.r = orbit1.size();
             automorphism.pi.resize(1, 1 % automorphism.r);
 
@@ -1333,6 +1338,7 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
             finish(phi2, orbit1);
 
             phi2.s = apply1(phi2, d) / d;
+            phi2.c = ro.c + 1;
 
 //            if (phi2.h % phi2.d != 0) {
                 for (std::size_t j = 0; j < roots.size(); ++j) {
@@ -1565,6 +1571,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
                         computeMaxOrbits(phi);
                         phi.s = apply1(phi, d) / d;
+                        phi.c = ro.c + 1;
 
                         addSkewClassByRepresentant(foundSkews, roots, ro, phi);
                     }
@@ -1670,6 +1677,7 @@ PROFILE SkewMorphism from_short_string(const std::string &string, Scalar n) {
     result.pi = std::move(pi);
     finish(result, orbit1);
     result.s = apply1(result, result.d % result.n) / result.d;
+//    result.c = ???;
     return result;
 }
 
@@ -1691,6 +1699,7 @@ SkewMorphism quotient(const SkewMorphism &skew) {
 
     ro.h = apply1(ro, 1 % ro.n) - 1 % ro.n;
     ro.s = apply1(ro, ro.d % ro.n) / ro.d;
+    ro.c = skew.c - 1;
 
     return ro;
 }
@@ -1708,6 +1717,7 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     }
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
+        skew.c = skew.h == 0 ? 0 : 1;
         addSkewMorphism(skew, skewMorphisms, true);
         computeCoprimes(numberCache[skew.r]);
         Orbit orbit12(skew.r, 1);
@@ -1727,6 +1737,7 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
 
             skew2.h = orbit12[1] - 1;
             skew2.s = orbit12[1];
+            skew2.c = skew.c;
 
             finish(skew2, orbit12);
 
@@ -1736,11 +1747,15 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_coset.txt"};
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
+        skew.c = 2;
         addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
     }
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
+        for (SkewMorphism ro = skew; ro.h != 0; ro = quotient(ro)) {
+            ++skew.c;
+        }
         addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
     }
     return true;
@@ -1759,7 +1774,7 @@ void printMato(std::ofstream &output, const SkewMorphism &skew) {
 }
 
 void printHtml(std::ofstream &output, const SkewMorphism &skew, Index index, const std::string &additionalClass, Scalar classSize) {
-    output << "\n<li class='skew " << additionalClass <<" n-" << skew.n << " d-" << skew.d << " h-" << skew.h << " r-" << skew.r << " s-" << skew.s;
+    output << "\n<li class='skew " << additionalClass <<" n-" << skew.n << " d-" << skew.d << " h-" << skew.h << " r-" << skew.r << " s-" << skew.s << " c-" << skew.c;
     if (skew.inverseOrbit) {
         output << " inv-1";
     }
