@@ -55,6 +55,34 @@ struct CompactSkewMorphism {
     Function pi;
 };
 
+template <typename T>
+PROFILE std::size_t hash_vector(const std::vector<T> &vector) {
+    std::string_view bytestring(reinterpret_cast<const char *>(vector.data()), vector.size() * sizeof(T));
+    return std::hash<std::string_view>{}(bytestring);
+}
+
+template <typename T, std::size_t N>
+PROFILE std::size_t hash_array(const std::array<T, N> &array) {
+    std::string_view bytestring(reinterpret_cast<const char *>(array.data()), N * sizeof(T));
+    return std::hash<std::string_view>{}(bytestring);
+}
+
+struct HashCompact {
+    PROFILE std::size_t operator()(const CompactSkewMorphism &compactSkew) const {
+        std::array<std::size_t, 2> sub_hash = {hash_vector(compactSkew.orbit1), hash_vector(compactSkew.pi)};
+        return hash_array(sub_hash);
+    }
+};
+
+struct EqualCompact {
+    PROFILE bool operator()(const CompactSkewMorphism &lhs, const CompactSkewMorphism &rhs) const {
+        return lhs.orbit1 == rhs.orbit1 && lhs.pi == rhs.pi;
+    }
+};
+
+//using SkewSet = std::unordered_set<CompactSkewMorphism, HashCompact, EqualCompact>;
+using SkewIndexMap = std::unordered_map<CompactSkewMorphism, Index, HashCompact, EqualCompact>;
+
 struct Class {
     Scalar size() const { return end - begin; }
     Index begin;
@@ -137,6 +165,7 @@ PROFILE Scalar apply1(const SkewMorphism &skewMorphism, Scalar a) {
 struct SkewMorphisms {
     std::vector<SkewMorphism> skews;
     std::vector<Classes> classes;
+    SkewIndexMap skewIndexMap;
     Scalar automorphismsEnd;
     Scalar preservingEnd;
 };
@@ -539,6 +568,13 @@ PROFILE void finish(SkewMorphism &skewMorphism, const Orbit& orbit1) {
     computeMaxOrbits(skewMorphism);
 }
 
+PROFILE CompactSkewMorphism toCompact(const SkewMorphism &skewMorphism) {
+    if (skewMorphism.permutation.orbits.empty()) {
+        return {{1}, {0}};
+    }
+    return {getOrbit1(skewMorphism), skewMorphism.pi};
+}
+
 PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorphisms, bool newClass) {
     const auto c = skewMorphism.c;
     while (skewMorphisms.classes.size() <= c) {
@@ -546,44 +582,18 @@ PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorph
     }
     auto &skews = skewMorphisms.skews;
     auto &classes = skewMorphisms.classes[c];
+    auto &skewIndexMap = skewMorphisms.skewIndexMap;
     if (newClass) {
         classes.emplace_back();
         classes.back().begin = skews.size();
         classes.back().representant = skews.size();
     }
+    skewIndexMap.insert({toCompact(skewMorphism), skews.size()});
     skews.emplace_back(std::move(skewMorphism));
     classes.back().end = skews.size();
 }
 
-template <typename T>
-PROFILE std::size_t hash_vector(const std::vector<T> &vector) {
-    std::string_view bytestring(reinterpret_cast<const char *>(vector.data()), vector.size() * sizeof(T));
-    return std::hash<std::string_view>{}(bytestring);
-}
-
-template <typename T, std::size_t N>
-PROFILE std::size_t hash_array(const std::array<T, N> &array) {
-    std::string_view bytestring(reinterpret_cast<const char *>(array.data()), N * sizeof(T));
-    return std::hash<std::string_view>{}(bytestring);
-}
-
-struct HashCompact {
-    PROFILE std::size_t operator()(const CompactSkewMorphism &compactSkew) const {
-        std::array<std::size_t, 2> sub_hash = {hash_vector(compactSkew.orbit1), hash_vector(compactSkew.pi)};
-        return hash_array(sub_hash);
-    }
-};
-
-struct EqualCompact {
-    PROFILE bool operator()(const CompactSkewMorphism &lhs, const CompactSkewMorphism &rhs) const {
-        return lhs.orbit1 == rhs.orbit1 && lhs.pi == rhs.pi;
-    }
-};
-
-using SkewSet = std::unordered_set<CompactSkewMorphism, HashCompact, EqualCompact>;
-
-void addSkewClassByRepresentant(SkewSet &foundSkews,
-                                std::vector<std::vector<std::vector<std::size_t>>> &roots,
+void addSkewClassByRepresentant(std::vector<std::vector<std::vector<std::size_t>>> &roots,
                                 const SkewMorphism &ro,
                                 const SkewMorphism &phi);
 
@@ -674,7 +684,6 @@ PROFILE void sEquals1(const Scalar d, const Number &number_n_div_d, SkewMorphism
 }
 
 PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorphisms &skewMorphisms) {
-    SkewSet foundSkews;
     std::vector<std::vector<std::vector<std::size_t>>> roots;
     auto &number_d = numberCache[d];
     computeCoprimes(number_d);
@@ -826,7 +835,7 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
                                                 ro.pi = {1};
                                                 finish(ro, skew.pi);
 
-                                                addSkewClassByRepresentant(foundSkews, roots, ro, skew);
+                                                addSkewClassByRepresentant(roots, ro, skew);
                                                 ++increment2;
                                             }
                                         }
@@ -854,7 +863,6 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
 }
 
 PROFILE void computeAutomorphisms(Number &number) {
-    SkewSet foundSkews;
     std::vector<std::vector<std::vector<std::size_t>>> roots;
     computeCoprimes(number);
     const auto n = number.n;
@@ -1252,8 +1260,7 @@ PROFILE void clearOrbit(Orbit &orbit) {
     }
 }
 
-PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do SkewMorphisms
-                                        std::vector<std::vector<std::vector<std::size_t>>> &roots,
+PROFILE void addSkewClassByRepresentant(std::vector<std::vector<std::vector<std::size_t>>> &roots,
                                         const SkewMorphism &ro,
                                         const SkewMorphism &phi) {
     const auto n = phi.n;
@@ -1265,7 +1272,8 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
 
     CompactSkewMorphism compactSkewMorphism = {getOrbit1(phi), phi.pi};  // TODO: do not copy
 
-    if (foundSkews.find(compactSkewMorphism) != foundSkews.end()) {
+    const auto &skewIndexMap = number.skewMorphisms.skewIndexMap;
+    if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
         return;
     }
 
@@ -1286,7 +1294,6 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
         roots.emplace_back(n);
 //    }
 
-    foundSkews.insert(compactSkewMorphism);
     addSkewMorphism(phi, number.skewMorphisms, true);
 
     CompactSkewMorphism compactSkewMorphism2;
@@ -1323,7 +1330,7 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
                 orbit1_ro[i] = (coprime_r_orbit[index] * coprime_r_inverse) % r;
             }
 
-            if (foundSkews.find(compactSkewMorphism2) != foundSkews.end()) {
+            if (skewIndexMap.find(compactSkewMorphism2) != skewIndexMap.end()) {
                 continue;
             }
 
@@ -1352,7 +1359,6 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
                 roots.emplace_back(n);
 //            }
 
-            foundSkews.insert(compactSkewMorphism2);
             addSkewMorphism(std::move(phi2), number.skewMorphisms, false);
         }
     }
@@ -1363,7 +1369,6 @@ PROFILE void addSkewClassByRepresentant(SkewSet &foundSkews,  // TODO: pridaj do
 
 //TODO: nemozu nejake nasobenia scitania pretiect?
 PROFILE void computeProperNotPreserving(Number &number) {
-    SkewSet foundSkews;
     const auto n = number.n;
     const auto number_nlambda = numberCache[n * number.lambda];
 
@@ -1395,6 +1400,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
     std::vector<Index> splitIndex(n + 1, 0);
 
     CompactSkewMorphism compactSkewMorphism;
+    const auto &skewIndexMap = number.skewMorphisms.skewIndexMap;
 
     for (const auto m: number_nlambda.divisors) {
         if (m >= n) {
@@ -1549,7 +1555,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                             continue;
                         }
 
-                        if (foundSkews.find(compactSkewMorphism) != foundSkews.end()) {
+                        if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
                             continue;
                         }
                         SkewMorphism phi;
@@ -1568,7 +1574,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                         phi.s = apply1(phi, d) / d;
                         phi.c = ro.c + 1;
 
-                        addSkewClassByRepresentant(foundSkews, roots, ro, phi);
+                        addSkewClassByRepresentant(roots, ro, phi);
                     }
                 }
             }
@@ -1707,7 +1713,6 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     std::string line;
     std::ifstream ifile;
 
-    SkewSet foundSkews;
     std::vector<std::vector<std::vector<std::size_t>>> roots;
 
     if (skewMorphisms.classes.size() < 4) {
@@ -1752,7 +1757,7 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
         skew.c = 2;
-        addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
+        addSkewClassByRepresentant(roots, quotient(skew), skew);
     }
     skewMorphisms.preservingEnd = skewMorphisms.skews.size();
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
@@ -1761,7 +1766,7 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
         for (SkewMorphism ro = skew; ro.h != 0; ro = quotient(ro)) {
             ++skew.c;
         }
-        addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
+        addSkewClassByRepresentant(roots, quotient(skew), skew);
     }
     return true;
 }
