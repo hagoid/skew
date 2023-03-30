@@ -135,12 +135,10 @@ PROFILE Scalar apply1(const SkewMorphism &skewMorphism, Scalar a) {
 }
 
 struct SkewMorphisms {
-    std::vector<SkewMorphism> automorphisms;
-    std::vector<SkewMorphism> properCosetPreserving;
-    std::vector<SkewMorphism> properNonPreserving;
-    Classes autoClasses;
-    Classes preservingClasses;
-    Classes nonPreservingClasses;
+    std::vector<SkewMorphism> skews;
+    std::vector<Classes> classes;
+    Scalar automorphismsEnd;
+    Scalar preservingEnd;
 };
 
 struct Number {//TODO: Cn
@@ -542,22 +540,19 @@ PROFILE void finish(SkewMorphism &skewMorphism, const Orbit& orbit1) {
 }
 
 PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorphisms, bool newClass) {
-    const auto add = [](Classes &classes, std::vector<SkewMorphism> &skews, SkewMorphism skew, bool newClass) {
-        if (newClass) {
-            classes.emplace_back();
-            classes.back().begin = skews.size();
-            classes.back().representant = skews.size();
-        }
-        skews.emplace_back(std::move(skew));
-        classes.back().end = skews.size();
-    };
-    if (skewMorphism.d == 1) {
-        add(skewMorphisms.autoClasses, skewMorphisms.automorphisms, std::move(skewMorphism), newClass);
-    } else if (skewMorphism.h % skewMorphism.d == 0) {
-        add(skewMorphisms.preservingClasses, skewMorphisms.properCosetPreserving, std::move(skewMorphism), newClass);
-    } else {
-        add(skewMorphisms.nonPreservingClasses, skewMorphisms.properNonPreserving, std::move(skewMorphism), newClass);
+    const auto c = skewMorphism.c;
+    while (skewMorphisms.classes.size() <= c) {
+        skewMorphisms.classes.emplace_back();
     }
+    auto &skews = skewMorphisms.skews;
+    auto &classes = skewMorphisms.classes[c];
+    if (newClass) {
+        classes.emplace_back();
+        classes.back().begin = skews.size();
+        classes.back().representant = skews.size();
+    }
+    skews.emplace_back(std::move(skewMorphism));
+    classes.back().end = skews.size();
 }
 
 template <typename T>
@@ -1118,75 +1113,68 @@ PROFILE Scalar powerToSkew(Scalar p, const SkewMorphism &ro) {
 }
 
 PROFILE SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index) {
-    if (index < skewMorphisms.automorphisms.size()) {
-        return skewMorphisms.automorphisms[index];
-    }
-    index -= skewMorphisms.automorphisms.size();
-    if (index < skewMorphisms.properCosetPreserving.size()) {
-        return skewMorphisms.properCosetPreserving[index];
-    }
-    index -= skewMorphisms.properCosetPreserving.size();
-    return skewMorphisms.properNonPreserving[index];
+    return skewMorphisms.skews[index];
 }
 
 PROFILE std::size_t getSkewCount(const SkewMorphisms &skewMorphisms) {
-    return skewMorphisms.automorphisms.size() +
-           skewMorphisms.properCosetPreserving.size() +
-           skewMorphisms.properNonPreserving.size();
+    return skewMorphisms.skews.size();
 }
 
 PROFILE std::size_t getClassesCount(const SkewMorphisms &skewMorphisms) {
-    return skewMorphisms.autoClasses.size() +
-           skewMorphisms.preservingClasses.size() +
-           skewMorphisms.nonPreservingClasses.size();
+    std::size_t result = 0;
+    for (const auto &classes: skewMorphisms.classes) {
+        result += classes.size();
+    }
+    return result;
 }
 
 PROFILE const SkewMorphism &getPreservingSkewByIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {  // TODO: iterators
-    if (index < skewMorphisms.automorphisms.size()) {
-        return skewMorphisms.automorphisms[index];
-    }
-    index -= skewMorphisms.automorphisms.size();
-    return skewMorphisms.properCosetPreserving[index];
+    return skewMorphisms.skews[index];
 }
 
 PROFILE std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms) {
-    return skewMorphisms.automorphisms.size() + skewMorphisms.properCosetPreserving.size();
+    return skewMorphisms.preservingEnd;
 }
 
 PROFILE std::size_t getPreservingClassIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {
-    if (index < skewMorphisms.autoClasses.size()) {
-        return skewMorphisms.autoClasses[index].begin;
+    if (index == 0) {
+        return skewMorphisms.classes[0][0].begin;
     }
-    index -= skewMorphisms.autoClasses.size();
-    return skewMorphisms.automorphisms.size() + skewMorphisms.preservingClasses[index].begin;
+    index -= 1;
+    if (index < skewMorphisms.classes[1].size()) {
+        return skewMorphisms.classes[1][index].begin;
+    }
+    index -= skewMorphisms.classes[1].size();
+    return skewMorphisms.classes[2][index].begin;
 }
 
 PROFILE std::size_t getPreservingClassesCount(const SkewMorphisms &skewMorphisms) {
-    return skewMorphisms.autoClasses.size() + skewMorphisms.preservingClasses.size();
+    return 1 + skewMorphisms.classes[1].size() + skewMorphisms.classes[2].size();
 }
 
 PROFILE const SkewMorphism &getProperSkewByIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {
-    if (index < skewMorphisms.properCosetPreserving.size()) {
-        return skewMorphisms.properCosetPreserving[index];
-    }
-    index -= skewMorphisms.properCosetPreserving.size();
-    return skewMorphisms.properNonPreserving[index];
+    return skewMorphisms.skews[skewMorphisms.automorphismsEnd + index];
 }
 
 PROFILE std::size_t getProperSkewCount(const SkewMorphisms &skewMorphisms) {
-    return skewMorphisms.properCosetPreserving.size() + skewMorphisms.properNonPreserving.size();
+    return skewMorphisms.skews.size() - skewMorphisms.automorphismsEnd;
 }
 
 PROFILE std::size_t getProperClassIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {
-    if (index < skewMorphisms.preservingClasses.size()) {
-        return skewMorphisms.preservingClasses[index].begin;
+    std::size_t i = 2;
+    while (index >= skewMorphisms.classes[i].size()) {
+        index -= skewMorphisms.classes[i].size();
+        ++i;
     }
-    index -= skewMorphisms.preservingClasses.size();
-    return skewMorphisms.properCosetPreserving.size() + skewMorphisms.nonPreservingClasses[index].begin;
+    return skewMorphisms.classes[i][index].begin;
 }
 
 PROFILE std::size_t getProperClassesCount(const SkewMorphisms &skewMorphisms) {
-    return skewMorphisms.preservingClasses.size() + skewMorphisms.nonPreservingClasses.size();
+    std::size_t result = 0;
+    for (std::size_t i = 2; i < skewMorphisms.classes.size(); ++i) {
+        result += skewMorphisms.classes[i].size();
+    }
+    return result;
 }
 
 PROFILE bool isPowerOf(const SkewMorphism &base, Scalar exponent, const SkewMorphism &power) {
@@ -1596,7 +1584,10 @@ PROFILE void countSkewmorphisms(Number &number) {
     }
     const auto n = number.n;
     const auto phi = number.phi;
+    number.skewMorphisms.classes.resize(4);
     computeAutomorphisms(number);
+    number.skewMorphisms.automorphismsEnd = number.skewMorphisms.skews.size();
+    number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
         const auto maxPrime = getMaxPrime(number);
@@ -1611,6 +1602,7 @@ PROFILE void countSkewmorphisms(Number &number) {
             sEquals1(d, number_n_div_d, number.skewMorphisms);
             sOtherThan1(d, number_n_div_d, number.skewMorphisms);
         }
+        number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
         if (number.powerOfTwo > 16 || !number.squareFree) {
             computeProperNotPreserving(number);
         }
@@ -1625,9 +1617,9 @@ void print(const Number &number) {
     const auto npreserving = getPreservingSkewCount(number.skewMorphisms) - phi;
     const auto nother = nproper - npreserving;
     const auto nclasses = getProperClassesCount(number.skewMorphisms);
-    const auto nclasses_a = number.skewMorphisms.autoClasses.size();
-    const auto nclasses_c = number.skewMorphisms.preservingClasses.size();
-    const auto nclasses_o = number.skewMorphisms.nonPreservingClasses.size();
+    const auto nclasses_a = 1 + number.skewMorphisms.classes[1].size();
+    const auto nclasses_c = number.skewMorphisms.classes[2].size();
+    const auto nclasses_o = getProperClassesCount(number.skewMorphisms) - nclasses_c;
 //    printf("Total number of skew morphisms of C_%d is %d\n", n, nskew);
 //    printf("Check sub-total of automorphisms of C_%d is %d\n", n, phi);
 //    auto perc = static_cast<Scalar>(std::round(float(100 * phi) / float(nskew)));
@@ -1718,6 +1710,10 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     SkewSet foundSkews;
     std::vector<std::vector<std::vector<std::size_t>>> roots;
 
+    if (skewMorphisms.classes.size() < 4) {
+        skewMorphisms.classes.resize(4);
+    }
+
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_auto.txt"};
     if (!ifile.is_open()) {
         return false;
@@ -1751,12 +1747,14 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
             addSkewMorphism(std::move(skew2), skewMorphisms, false);
         }
     }
+    skewMorphisms.automorphismsEnd = skewMorphisms.skews.size();
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_coset.txt"};
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
         skew.c = 2;
         addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
     }
+    skewMorphisms.preservingEnd = skewMorphisms.skews.size();
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
@@ -1840,17 +1838,21 @@ void printHtml(std::ofstream &output, const Number &number) {
 
     Index index = 0;
     output << "\n<ol>";
-    for (const auto &c: number.skewMorphisms.autoClasses) {
-        const auto &skew = number.skewMorphisms.automorphisms[c.representant];
-        printHtml(output, skew, ++index, "auto", c.size());
+    for (std::size_t i = 0; i < 2; ++i) {
+        for (const auto &c: number.skewMorphisms.classes[i]) {
+            const auto &skew = number.skewMorphisms.skews[c.representant];
+            printHtml(output, skew, ++index, "auto", c.size());
+        }
     }
-    for (const auto &c: number.skewMorphisms.preservingClasses) {
-        const auto &skew = number.skewMorphisms.properCosetPreserving[c.representant];
+    for (const auto &c: number.skewMorphisms.classes[2]) {
+        const auto &skew = number.skewMorphisms.skews[c.representant];
         printHtml(output, skew, ++index, "coset", c.size());
     }
-    for (const auto &c: number.skewMorphisms.nonPreservingClasses) {
-        const auto &skew = number.skewMorphisms.properNonPreserving[c.representant];
-        printHtml(output, skew, ++index, "other", c.size());
+    for (std::size_t i = 3; i < number.skewMorphisms.classes.size(); ++i) {
+        for (const auto &c: number.skewMorphisms.classes[i]) {
+            const auto &skew = number.skewMorphisms.skews[c.representant];
+            printHtml(output, skew, ++index, "other", c.size());
+        }
     }
     output << "\n</ol>";
 
@@ -1906,19 +1908,23 @@ int main(int argc, char *argv[]) {
         }
         std::ofstream file;
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
-        for (const auto &c: number.skewMorphisms.autoClasses) {
-            const auto &skew = number.skewMorphisms.automorphisms[c.representant];
-            file << to_short_string(skew) << std::endl;
+        for (std::size_t i = 0; i < 2; ++i) {
+            for (const auto &c: number.skewMorphisms.classes[i]) {
+                const auto &skew = number.skewMorphisms.skews[c.representant];
+                file << to_short_string(skew) << std::endl;
+            }
         }
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_coset.txt"};
-        for (const auto &c: number.skewMorphisms.preservingClasses) {
-            const auto &skew = number.skewMorphisms.properCosetPreserving[c.representant];
+        for (const auto &c: number.skewMorphisms.classes[2]) {
+            const auto &skew = number.skewMorphisms.skews[c.representant];
             file << to_short_string(skew) << std::endl;
         }
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_other.txt"};
-        for (const auto &c: number.skewMorphisms.nonPreservingClasses) {
-            const auto &skew = number.skewMorphisms.properNonPreserving[c.representant];
-            file << to_short_string(skew) << std::endl;
+        for (std::size_t i = 3; i < number.skewMorphisms.classes.size(); ++i) {
+            for (const auto &c: number.skewMorphisms.classes[i]) {
+                const auto &skew = number.skewMorphisms.skews[c.representant];
+                file << to_short_string(skew) << std::endl;
+            }
         }
     }
 
