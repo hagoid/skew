@@ -1082,44 +1082,6 @@ PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
     return true;
 }
 
-PROFILE Scalar powerToSkew(Scalar p, const SkewMorphism &ro) {
-    const auto &orbit1_ro = getOrbit1(ro);
-    for (const auto prime: numberCache[p].primes) {
-        if (p == prime) {
-            break;
-        }
-        Scalar period = 1;
-        while (orbit1_ro[period] % prime != 1) {
-            ++period;
-        }
-        if (ro.r % period != 0) {
-            continue;
-        }
-        bool ok = true;
-        for (std::size_t i = period + 1; i < orbit1_ro.size(); ++i) {
-            if ((orbit1_ro[i] - orbit1_ro[i - period]) % prime != 0) {
-                ok = false;
-                break;
-            }
-        }
-        if (!ok) {
-            continue;
-        }
-        const auto modulo = ro.pi[0] % period;//TODO: copy-paste, zjednotit
-        bool all = true;
-        for (std::size_t j = 1; j < ro.pi.size(); ++j) {
-            if (ro.pi[j] % period != modulo) {
-                all = false;
-                break;
-            }
-        }
-        if (all) {
-            return prime;
-        }
-    }
-    return p;
-}
-
 PROFILE SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index) {
     return skewMorphisms.skews[index];
 }
@@ -1442,6 +1404,9 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
             compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
 
+            const auto exponent = numberCache[p].primes[0];
+            const auto p_exponent = p / exponent;
+
             for (std::size_t psi_class_index = 0; psi_class_index < getPreservingClassesCount(number.skewMorphisms); ++psi_class_index) {
                 const auto psi_index = getPreservingClassIndex(number.skewMorphisms, psi_class_index);
 
@@ -1460,9 +1425,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 if (psi.max_orbits < p) {
                     continue;
                 }
-
-                const auto exponent = powerToSkew(p, ro);
-                const auto p_exponent = p / exponent;
 
                 const auto &possiblePowerIndices = roots[psi_index][p_exponent];
 
