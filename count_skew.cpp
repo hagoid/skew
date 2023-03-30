@@ -1686,27 +1686,28 @@ PROFILE SkewMorphism from_short_string(const std::string &string, Scalar n) {
     return result;
 }
 
-SkewMorphism quotient(const SkewMorphism &skew) {
-    SkewMorphism ro;
-    ro.n = skew.r;
-    ro.r = skew.d;
+PROFILE CompactSkewMorphism compactQuotient(const SkewMorphism &skew) {
+    if (skew.d == 1) {
+        return {{1}, {0}};
+    }
+    if (skew.h % skew.d == 0) {
+        return {skew.pi, {1}};
+    }
+    const auto &orbit1 = getOrbit1(skew);
+    Orbit ro_pi;
+    ro_pi.push_back(1);
+    for (std::size_t i = 1; orbit1[i] % skew.d != 1; ++i) {
+        ro_pi.push_back(orbit1[i] % skew.d);
+    }
+    ro_pi.shrink_to_fit();
+    return {skew.pi, ro_pi};
+}
 
-    ro.d = 0;
-    Scalar a = 1 % skew.d;
-    const auto pi1 = skew.pi[a];
-    do {
-        ++ro.d;
-        ro.pi.push_back(a);
-        a = apply1(skew, a) % skew.d;
-    } while (skew.pi[a] != pi1);
-
-    finish(ro, skew.pi);
-
-    ro.h = apply1(ro, 1 % ro.n) - 1 % ro.n;
-    ro.s = apply1(ro, ro.d % ro.n) / ro.d;
-    ro.c = skew.c - 1;
-
-    return ro;
+PROFILE const SkewMorphism &quotient(const SkewMorphism &skew) {
+    const auto compact = compactQuotient(skew);
+    const auto &number_r = numberCache[skew.r];
+    const auto index = number_r.skewMorphisms.skewIndexMap.find(compact)->second;
+    return number_r.skewMorphisms.skews[index];
 }
 
 bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
@@ -1763,10 +1764,9 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
-        for (SkewMorphism ro = skew; ro.h != 0; ro = quotient(ro)) {
-            ++skew.c;
-        }
-        addSkewClassByRepresentant(roots, quotient(skew), skew);
+        const auto &ro = quotient(skew);
+        skew.c = ro.c + 1;
+        addSkewClassByRepresentant(roots, ro, skew);
     }
     return true;
 }
