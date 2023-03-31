@@ -9,6 +9,7 @@
 #include <string_view>
 #include <unordered_set>
 #include <vector>
+#include <memory>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -163,7 +164,7 @@ PROFILE Scalar apply1(const SkewMorphism &skewMorphism, Scalar a) {
 }
 
 struct SkewMorphisms {
-    std::vector<SkewMorphism> skews;
+    std::vector<std::unique_ptr<SkewMorphism>> skews;
     std::vector<Classes> classes;
     SkewIndexMap skewIndexMap;
     Scalar automorphismsEnd;
@@ -589,7 +590,7 @@ PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorph
         classes.back().representant = skews.size();
     }
     skewIndexMap.insert({toCompact(skewMorphism), skews.size()});
-    skews.emplace_back(std::move(skewMorphism));
+    skews.emplace_back(std::make_unique<SkewMorphism>(std::move(skewMorphism)));
     classes.back().end = skews.size();
 }
 
@@ -1083,7 +1084,7 @@ PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
 }
 
 PROFILE SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index) {
-    return skewMorphisms.skews[index];
+    return *skewMorphisms.skews[index];
 }
 
 PROFILE std::size_t getSkewCount(const SkewMorphisms &skewMorphisms) {
@@ -1099,7 +1100,7 @@ PROFILE std::size_t getClassesCount(const SkewMorphisms &skewMorphisms) {
 }
 
 PROFILE const SkewMorphism &getPreservingSkewByIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {  // TODO: iterators
-    return skewMorphisms.skews[index];
+    return *skewMorphisms.skews[index];
 }
 
 PROFILE std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms) {
@@ -1123,7 +1124,7 @@ PROFILE std::size_t getPreservingClassesCount(const SkewMorphisms &skewMorphisms
 }
 
 PROFILE const SkewMorphism &getProperSkewByIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {
-    return skewMorphisms.skews[skewMorphisms.automorphismsEnd + index];
+    return *skewMorphisms.skews[skewMorphisms.automorphismsEnd + index];
 }
 
 PROFILE std::size_t getProperSkewCount(const SkewMorphisms &skewMorphisms) {
@@ -1332,7 +1333,7 @@ PROFILE void addSkewClassByRepresentant(std::vector<std::vector<std::vector<std:
 //TODO: nemozu nejake nasobenia scitania pretiect?
 PROFILE void computeProperNotPreserving(Number &number) {
     const auto n = number.n;
-    const auto number_nlambda = numberCache[n * number.lambda];
+    const auto &number_nlambda = numberCache[n * number.lambda];
 
     const auto maxPrime = getMaxPrime(number);
     auto n_div_maxPrime = n / maxPrime;
@@ -1438,7 +1439,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 clearOrbit(t);
                 const auto inverse_ro_pi = inverse(ro.pi, d);
                 for (const auto power_index: possiblePowerIndices) {
-                    const auto power = getSkewByIndex(number.skewMorphisms, power_index);  // TODO: do not copy
+                    const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
 
                     const auto &power_orbits = power.permutation.orbits;
 
@@ -1669,7 +1670,7 @@ PROFILE const SkewMorphism &quotient(const SkewMorphism &skew) {
     const auto compact = compactQuotient(skew);
     const auto &number_r = numberCache[skew.r];
     const auto index = number_r.skewMorphisms.skewIndexMap.find(compact)->second;
-    return number_r.skewMorphisms.skews[index];
+    return *number_r.skewMorphisms.skews[index];
 }
 
 bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
@@ -1807,17 +1808,17 @@ void printHtml(std::ofstream &output, const Number &number) {
     output << "\n<ol>";
     for (std::size_t i = 0; i < 2; ++i) {
         for (const auto &c: number.skewMorphisms.classes[i]) {
-            const auto &skew = number.skewMorphisms.skews[c.representant];
+            const auto &skew = *number.skewMorphisms.skews[c.representant];
             printHtml(output, skew, ++index, "auto", c.size());
         }
     }
     for (const auto &c: number.skewMorphisms.classes[2]) {
-        const auto &skew = number.skewMorphisms.skews[c.representant];
+        const auto &skew = *number.skewMorphisms.skews[c.representant];
         printHtml(output, skew, ++index, "coset", c.size());
     }
     for (std::size_t i = 3; i < number.skewMorphisms.classes.size(); ++i) {
         for (const auto &c: number.skewMorphisms.classes[i]) {
-            const auto &skew = number.skewMorphisms.skews[c.representant];
+            const auto &skew = *number.skewMorphisms.skews[c.representant];
             printHtml(output, skew, ++index, "other", c.size());
         }
     }
@@ -1877,19 +1878,19 @@ int main(int argc, char *argv[]) {
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
         for (std::size_t i = 0; i < 2; ++i) {
             for (const auto &c: number.skewMorphisms.classes[i]) {
-                const auto &skew = number.skewMorphisms.skews[c.representant];
+                const auto &skew = *number.skewMorphisms.skews[c.representant];
                 file << to_short_string(skew) << std::endl;
             }
         }
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_coset.txt"};
         for (const auto &c: number.skewMorphisms.classes[2]) {
-            const auto &skew = number.skewMorphisms.skews[c.representant];
+            const auto &skew = *number.skewMorphisms.skews[c.representant];
             file << to_short_string(skew) << std::endl;
         }
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_other.txt"};
         for (std::size_t i = 3; i < number.skewMorphisms.classes.size(); ++i) {
             for (const auto &c: number.skewMorphisms.classes[i]) {
-                const auto &skew = number.skewMorphisms.skews[c.representant];
+                const auto &skew = *number.skewMorphisms.skews[c.representant];
                 file << to_short_string(skew) << std::endl;
             }
         }
