@@ -1426,6 +1426,9 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 if (psi.max_orbits < p) {
                     continue;
                 }
+                if (ro.s != psi.pi[1 % psi.d]) {
+                    continue;
+                }
 
                 const auto &possiblePowerIndices = roots[psi_index][p_exponent];
 
@@ -1440,6 +1443,10 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 const auto inverse_ro_pi = inverse(ro.pi, d);
                 for (const auto power_index: possiblePowerIndices) {
                     const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
+
+                    if (apply1(ro, exponent) != exponent * power.pi[1 % power.d]) {  // TODO: porovnaj cele
+                        continue;
+                    }
 
                     const auto &power_orbits = power.permutation.orbits;
 
