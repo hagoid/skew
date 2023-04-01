@@ -36,11 +36,17 @@ struct Permutation {
     OrbitPlaces places;
 };
 
+struct CompactSkewMorphism {
+    Orbit orbit1;
+    Function pi;
+};
+
 struct SkewMorphism {
     Permutation permutation;
     Function pi;
     std::vector<Index> free_x;
     std::unordered_map<Scalar, std::vector<Index>> roots;
+    std::unordered_map<Scalar, Index> preservingSubgroups;
     Scalar n = 0;
     Scalar d = 0;
     Scalar h = 0;
@@ -50,11 +56,6 @@ struct SkewMorphism {
     Scalar max_orbits = 0;
     bool inverseOrbit = false;
     bool powerOfInverseOrbit = false;
-};
-
-struct CompactSkewMorphism {
-    Orbit orbit1;
-    Function pi;
 };
 
 template <typename T>
@@ -97,6 +98,8 @@ PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
     return skewMorphism.permutation.orbits[0];
 }
 
+void computePreservingSubgroups(SkewMorphism &skewMorphism);
+
 PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj free_x rata a shrinkuje a inverseOrbituje
     auto &orbits = skewMorphism.permutation.orbits;
     if (orbits.empty()) {
@@ -129,6 +132,8 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat es
     skewMorphism.permutation.places.shrink_to_fit();
     skewMorphism.pi.shrink_to_fit();
     skewMorphism.free_x.shrink_to_fit();
+
+    computePreservingSubgroups(skewMorphism);
 }
 
 PROFILE Scalar apply(const SkewMorphism &skewMorphism, Scalar n, Scalar a) {
@@ -186,6 +191,46 @@ struct Number {//TODO: Cn
 };
 
 std::vector<Number> numberCache = {};//TODO: non static?
+
+PROFILE void computePreservingSubgroups(SkewMorphism &skewMorphism) {
+    const auto &number = numberCache[skewMorphism.n];
+    for (const auto d: number.divisors) {
+        if (d == 1 || d == number.n) {
+            continue;
+        }
+        const auto &number_d = numberCache[skewMorphism.n / d];
+        const auto &place = skewMorphism.permutation.places[d];
+        CompactSkewMorphism compact;
+        if (place.orbitIndex == -1) {
+            compact.orbit1 = {1};
+            compact.pi = {0};
+        } else {
+            const auto &orbit = skewMorphism.permutation.orbits[place.orbitIndex];
+            auto indexOnOrbit = place.indexOnOrbit + 1;
+            if (indexOnOrbit >= orbit.size()) {
+                indexOnOrbit -= orbit.size();
+            }
+            if (orbit[indexOnOrbit] % d != 0) {
+                continue;
+            }
+            compact.orbit1.reserve(orbit.size());
+            compact.orbit1.push_back(1);
+            while (indexOnOrbit != place.indexOnOrbit) {
+                compact.orbit1.push_back(orbit[indexOnOrbit] / d);
+                ++indexOnOrbit;
+                if (indexOnOrbit >= orbit.size()) {
+                    indexOnOrbit -= orbit.size();
+                }
+            }
+            compact.pi.push_back(1);
+            for (std::size_t i = d % skewMorphism.d; skewMorphism.pi[i] % orbit.size() != 1; i = (i + d) % skewMorphism.d) {
+                compact.pi.push_back(skewMorphism.pi[i] % orbit.size());
+            }
+        }
+        const auto index = number_d.skewMorphisms.skewIndexMap.find(compact)->second;
+        skewMorphism.preservingSubgroups.insert({d, index});
+    }
+}
 
 Scalar getMaxPrime(const Number &number) {
     if (number.primes.empty()) {
@@ -578,7 +623,46 @@ PROFILE CompactSkewMorphism toCompact(const SkewMorphism &skewMorphism) {
 }
 
 SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index);
-bool isPowerOf(const SkewMorphism &base, Scalar exponent, const SkewMorphism &power);
+const SkewMorphism &quotient(const SkewMorphism &skew);
+
+PROFILE SkewMorphism &powerOf(const SkewMorphism &skewMorphism, const std::pair<Scalar, Index> &sub, SkewMorphisms &skewMorphisms) {
+    const auto e = sub.first;
+    const auto r = skewMorphism.r / e;
+    const auto &orbit1 = getOrbit1(skewMorphism);
+    const auto &roOther = getSkewByIndex(numberCache[r].skewMorphisms, sub.second);
+    CompactSkewMorphism compactOther;
+    compactOther.orbit1.reserve(r);
+    for (std::size_t i = 0; i < skewMorphism.r; i += e) {
+        compactOther.orbit1.push_back(orbit1[i]);
+    }
+    compactOther.pi = roOther.h > 0 ? getOrbit1(roOther) : Orbit{1 % r};
+    return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
+}
+
+PROFILE void computeRoots(SkewMorphisms &skewMorphisms, Index index) {
+    auto &skewMorphism = getSkewByIndex(skewMorphisms, index);
+    if (skewMorphism.n > 1) {
+        const auto &ro = quotient(skewMorphism);
+        for (const auto sub: ro.preservingSubgroups) {
+            const auto e = sub.first;
+            if (skewMorphism.r % e != 0) {
+                continue;
+            }
+            auto &other = powerOf(skewMorphism, sub, skewMorphisms);
+            if (skewMorphism.inverseOrbit) {
+                other.powerOfInverseOrbit = true;
+            }
+            other.roots[e].push_back(index);
+        }
+    }
+    skewMorphism.roots[1].push_back(index);
+}
+
+PROFILE void computeRoots(SkewMorphisms &skewMorphisms) {
+    for (Index index = 0; index < skewMorphisms.skews.size(); ++index) {
+        computeRoots(skewMorphisms, index);
+    }
+}
 
 PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorphisms, bool newClass) {
     const auto c = skewMorphism.c;
@@ -588,31 +672,20 @@ PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorph
     auto &skews = skewMorphisms.skews;
     auto &classes = skewMorphisms.classes[c];
     auto &skewIndexMap = skewMorphisms.skewIndexMap;
+    Index index = skews.size();
     if (newClass) {
         classes.emplace_back();
-        classes.back().begin = skews.size();
-        classes.back().representant = skews.size();
+        classes.back().begin = index;
+        classes.back().representant = index;
     }
 
-    for (std::size_t j = 0; j < skewMorphisms.skews.size(); ++j) {
-        auto &other = getSkewByIndex(skewMorphisms, j);
-        if (skewMorphism.r % other.r != 0) {
-            continue;
-        }
-        const auto e = skewMorphism.r / other.r;
-        if (isPowerOf(skewMorphism, e, other)) {
-            if (skewMorphism.inverseOrbit) {
-                other.powerOfInverseOrbit = true;
-            }
-            other.roots[e].push_back(skewMorphisms.skews.size());
-        }
-    }
-    if (skewMorphism.n > 1) {
-        skewMorphism.roots[1].push_back(skewMorphisms.skews.size());
-    }
-
-    skewIndexMap.insert({toCompact(skewMorphism), skews.size()});
+    skewIndexMap.insert({toCompact(skewMorphism), index});
     skews.emplace_back(std::make_unique<SkewMorphism>(std::move(skewMorphism)));
+
+    if (skewMorphism.c > 2) {
+        computeRoots(skewMorphisms, index);
+    }
+
     classes.back().end = skews.size();
 }
 
@@ -1164,28 +1237,6 @@ PROFILE std::size_t getProperClassesCount(const SkewMorphisms &skewMorphisms) {
     return result;
 }
 
-PROFILE bool isPowerOf(const SkewMorphism &base, Scalar exponent, const SkewMorphism &power) {
-    for (const auto &orbit: power.permutation.orbits) {
-        Scalar oldO = orbit[0];
-        for (std::size_t i = 1; i < orbit.size(); ++i) {
-            const auto o = orbit[i];
-            if (apply(base, exponent, oldO) != o) {
-                return false;
-            }
-            oldO = o;
-        }
-        if (apply(base, exponent, oldO) != orbit[0]) {
-            return false;
-        }
-    }
-    for (const auto &place: power.permutation.places) {//TODO: fixed points as part of Permutation
-        if (place.orbitIndex == -1 && apply(base, exponent, place.indexOnOrbit) != place.indexOnOrbit) {
-            return false;
-        }
-    }
-    return true;
-}
-
 PROFILE Function inverse(const Function &function, Scalar n) {
     Function result(n, -1);
     for (Scalar x = 0; x < function.size(); ++x) {
@@ -1307,6 +1358,8 @@ PROFILE void addSkewClassByRepresentant(const SkewMorphism &ro, const SkewMorphi
     }
 }
 
+CompactSkewMorphism compactQuotient(const SkewMorphism &skew);
+
 //TODO: zoradit podla radu
 //TODO: kanonicke poradie autov, aj cosetov
 
@@ -1409,7 +1462,8 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 for (const auto power_index: possiblePowerIndices) {
                     const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
 
-                    if (apply1(ro, exponent) != exponent * power.pi[1 % power.d]) {  // TODO: porovnaj cele
+                    if (ro.preservingSubgroups.find(exponent)->second != numberCache[r / exponent].skewMorphisms.skewIndexMap.find(
+                            compactQuotient(power))->second) {
                         continue;
                     }
 
@@ -1528,7 +1582,6 @@ PROFILE void countSkewmorphisms(Number &number) {
     number.skewMorphisms.classes.resize(4);
     computeAutomorphisms(number);
     number.skewMorphisms.automorphismsEnd = number.skewMorphisms.skews.size();
-    number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
         const auto maxPrime = getMaxPrime(number);
@@ -1544,9 +1597,16 @@ PROFILE void countSkewmorphisms(Number &number) {
             sOtherThan1(d, number_n_div_d, number.skewMorphisms);
         }
         number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
+
+        computeRoots(number.skewMorphisms);
+
         if (number.powerOfTwo > 16 || !number.squareFree) {
             computeProperNotPreserving(number);
         }
+    } else {
+        number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
+
+        computeRoots(number.skewMorphisms);
     }
 }
 
@@ -1694,6 +1754,9 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
         addSkewClassByRepresentant(quotient(skew), skew);
     }
     skewMorphisms.preservingEnd = skewMorphisms.skews.size();
+
+    computeRoots(skewMorphisms);
+
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
     while (std::getline(ifile, line)) {
         auto skew = from_short_string(line, n);
