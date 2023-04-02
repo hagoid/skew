@@ -1573,6 +1573,136 @@ PROFILE void computeProperNotPreserving(Number &number) {
 //    printf("%d %ld\n", n, foundSkews.size());
 }
 
+struct MatoComparator {
+    bool operator()(const SkewMorphism &lhs, const SkewMorphism &rhs) {
+        if (lhs.n != rhs.n) {
+            return lhs.n < rhs.n;
+        }
+        if (std::min(lhs.c, 3) != std::min(rhs.c, 3)) {
+            return lhs.c < rhs.c;
+        }
+        if (lhs.d != rhs.d) {
+            return lhs.d < rhs.d;
+        }
+        if (lhs.c < 3) {
+            if (lhs.s != rhs.s) {
+                return lhs.s < rhs.s;
+            }
+            if (lhs.d == 1) {
+                return false;
+            }
+            if (lhs.h != rhs.h) {
+                return lhs.h < rhs.h;
+            }
+            if (lhs.pi[1] != rhs.pi[1]) {
+                return lhs.pi[1] < rhs.pi[1];
+            }
+            return false;
+        }
+        if (lhs.r != rhs.r) {
+            return lhs.r < rhs.r;
+        }
+        auto &number_r = numberCache[lhs.r];
+        const auto &lq = quotient(lhs);
+        const auto &rq = quotient(rhs);
+//        auto lleastq = lq;
+//        auto rleastq = rq;
+//        Scalar lc = 1;
+//        Scalar rc = 1;
+//        auto &lnumber_r = numberCache[lq.r];
+//        computeCoprimes(lnumber_r);
+//        for (const auto coprime_r: lnumber_r.coprimes) {
+//            const auto r = lq.r;
+//            const auto d = lq.d;
+//            const auto coprime_r_inverse = (r + inverse(r, coprime_r)) % r;
+//            CompactSkewMorphism compact;
+//            auto &orbit1 = compact.orbit1;
+//            auto &orbit1_ro = compact.pi;
+//            orbit1.resize(r, 1);
+//            orbit1_ro.resize(d, 1);
+//            const auto &orbit = getOrbit1(lq);
+//            std::size_t index = 0;
+//            for (std::size_t i = 1; i < r; ++i) {
+//                index += coprime_r;
+//                if (index >= r) index -= r;
+//                orbit1[i] = orbit[index];
+//            }
+//            const auto &ro = quotient(lq);
+//            const auto &coprime_r_place = ro.permutation.places[coprime_r];
+//            const auto &coprime_r_orbit = ro.permutation.orbits[coprime_r_place.orbitIndex];
+//            index = coprime_r_place.indexOnOrbit;
+//            for (std::size_t i = 1; i < d; ++i) {
+//                ++index;
+//                if (index >= d) index -= d;
+//                orbit1_ro[i] = (coprime_r_orbit[index] * coprime_r_inverse) % r;
+//            }
+//
+//            const auto &lq2 = number_r.skewMorphisms.skews[number_r.skewMorphisms.skewIndexMap.find(compact)->second];
+//            if (operator()(*lq2, lleastq)) {
+//                lleastq = *lq2;
+//                lc = coprime_r_inverse;
+//            }
+//        }
+//        auto &rnumber_r = numberCache[rq.r];
+//        computeCoprimes(rnumber_r);
+//        for (const auto coprime_r: rnumber_r.coprimes) {
+//            const auto r = rq.r;
+//            const auto d = rq.d;
+//            const auto coprime_r_inverse = (r + inverse(r, coprime_r)) % r;
+//            CompactSkewMorphism compact;
+//            auto &orbit1 = compact.orbit1;
+//            auto &orbit1_ro = compact.pi;
+//            orbit1.resize(r, 1);
+//            orbit1_ro.resize(d, 1);
+//            const auto &orbit = getOrbit1(rq);
+//            std::size_t index = 0;
+//            for (std::size_t i = 1; i < r; ++i) {
+//                index += coprime_r;
+//                if (index >= r) index -= r;
+//                orbit1[i] = orbit[index];
+//            }
+//            const auto &ro = quotient(rq);
+//            const auto &coprime_r_place = ro.permutation.places[coprime_r];
+//            const auto &coprime_r_orbit = ro.permutation.orbits[coprime_r_place.orbitIndex];
+//            index = coprime_r_place.indexOnOrbit;
+//            for (std::size_t i = 1; i < d; ++i) {
+//                ++index;
+//                if (index >= d) index -= d;
+//                orbit1_ro[i] = (coprime_r_orbit[index] * coprime_r_inverse) % r;
+//            }
+//
+//            const auto &rq2 = number_r.skewMorphisms.skews[number_r.skewMorphisms.skewIndexMap.find(compact)->second];
+//            if (operator()(*rq2, rleastq)) {
+//                rleastq = *rq2;
+//                rc = coprime_r_inverse;
+//            }
+//        }
+//        if (operator()(lleastq, rleastq)) {
+//            return true;
+//        }
+//        if (operator()(rleastq, lleastq)) {
+//            return false;
+//        }
+        if (operator()(lq, rq)) {
+            return true;
+        }
+        if (operator()(rq, lq)) {
+            return false;
+        }
+        auto &skewMorphisms = numberCache[lhs.n].skewMorphisms;
+        const auto &lcp = powerOf(lhs, *lq.preservingSubgroups.find(lq.d), skewMorphisms);
+        const auto &rcp = powerOf(rhs, *rq.preservingSubgroups.find(rq.d), skewMorphisms);
+        if (operator()(lcp, rcp)) {
+            return true;
+        }
+        if (operator()(rcp, lcp)) {
+            return false;
+        }
+
+        return getOrbit1(lhs) < getOrbit1(rhs);
+    }
+};
+
 PROFILE void countSkewmorphisms(Number &number) {
     if (getSkewCount(number.skewMorphisms) != 0) {
         return;
@@ -1767,15 +1897,75 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
     return true;
 }
 
-void printMato(std::ofstream &output, const SkewMorphism &skew) {
-    output << "\nSkew morphism " << to_string(skew);
-    output << "\n of order " << std::to_string(skew.r);
-    output << "\n with kernel of order " << std::to_string(skew.n / skew.d);
-    output << "\n and smallest kernel generator " << std::to_string(skew.d);
-    if (skew.d == 1) {
-        output << "\n and power function values [ 1 ]" << std::endl;
+std::string oldSplit(const std::string &line) {
+    std::string result;
+    std::stringstream ss(line);
+    std::string w;
+    std::string last;
+    std::string d;
+    while (getline(ss, w, ' ')) {
+        if (last.size() + d.size() <= 80) {
+            last += d;
+        } else {
+            result += "\n" + last;
+            last = "";
+            d = "";
+        }
+        if (last.size() + w.size() <= 80) {
+            last += w;
+            d = " ";
+        } else {
+            result += "\n" + last;
+            last = w;
+        }
+    }
+    if (!last.empty()) {
+        result += "\n" + last;
+    }
+    return result;
+}
+
+void printMato(std::ofstream &output, const SkewMorphism &skew, bool old = false) {
+    if (!old) {
+        output << "\nSkew morphism " << to_string(skew);
+        output << "\n of order " << std::to_string(skew.r);
     } else {
-        output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+        std::string line = "Skew morphism ";
+        if (skew.permutation.orbits.empty()) {
+            line += "Id(sn)";
+        } else {
+            auto orbits = skew.permutation.orbits;
+            std::sort(orbits.begin(), orbits.end(), [](const auto &lhs, const auto &rhs) {return lhs[0] < rhs[0];});
+            for (const auto &orbit: orbits) {
+                line += "(" + to_string(orbit) + ")";
+            }
+        }
+        output << oldSplit(line);
+    }
+    output << "\n with kernel of order " << std::to_string(skew.n / skew.d);
+    if (!old) {
+        output << "\n and smallest kernel generator " << std::to_string(skew.d);
+        if (skew.d == 1) {
+            output << "\n and power function values [ 1 ]" << std::endl;
+        } else {
+            output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+        }
+        output << "\n  and with periodicity " << std::to_string(quotient(skew).d);
+    } else {
+        std::string line = " and power function values [ ";
+        if (skew.d == 1) {
+            line += "1";
+            for (int i = 1; i < skew.n; ++i) {
+                line += ", 1";
+            }
+        } else {
+            line += to_string(skew.pi);
+            for (int i = 1; i < skew.n / skew.d; ++i) {
+                line += ", " + to_string(skew.pi);
+            }
+        }
+        line += " ]";
+        output << oldSplit(line) << std::endl;
     }
 }
 
@@ -1930,31 +2120,20 @@ int main(int argc, char *argv[]) {
     }
 
 //    std::ofstream output("skew" + std::to_string(N) + "output.txt");
-//    for (auto n = N; n <= N; ++n) {
+//    for (auto n = A; n <= N; ++n) {
 //        auto &number = numberCache[n];
 //        output << "\nn = " << n << std::endl;
 //
-//        auto &skewMorphisms = number.skewMorphisms;
+//        std::vector<SkewMorphism> skews;
+//        std::transform(number.skewMorphisms.skews.begin(), number.skewMorphisms.skews.end(), std::back_inserter(skews), [](const auto &skew) {return *skew;});
 //
-//        std::sort(skewMorphisms.automorphisms.begin(), skewMorphisms.automorphisms.end(), [](const auto& lhs, const auto &rhs) { return lhs.h < rhs.h; });
+//        std::sort(skews.begin(), skews.end(), MatoComparator{});
 //
-//        for (const auto &skew: skewMorphisms.automorphisms) {
-//            printMato(output, skew);
+//        for (const auto &skew: skews) {
+//            printMato(output, skew, true);
 //        }
 //
-//        std::sort(skewMorphisms.properCosetPreserving.begin(), skewMorphisms.properCosetPreserving.end(), [](const auto& lhs, const auto &rhs) {return lhs.d < rhs.d; });
-//
-//        for (const auto &skew: skewMorphisms.properCosetPreserving) {
-//            printMato(output, skew);
-//        }
-//
-//        std::sort(skewMorphisms.properNonPreserving.begin(), skewMorphisms.properNonPreserving.end(), [](const auto& lhs, const auto &rhs) {return lhs.d < rhs.d; });
-//
-//        for (const auto &skew: skewMorphisms.properNonPreserving) {
-//            printMato(output, skew);
-//        }
-//
-//        output << "\nTotal number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms);
+//        output << "\nTotal number of skew morphisms of C_" << n << " is " << skews.size();
 //        output << "\nCheck sub-total of automorphisms of C_" << n << " is " << number.phi << std::endl;
 //
 //        output << "\n.............................................................................." << std::endl;
