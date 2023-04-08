@@ -22,7 +22,7 @@ $.fn.represent = function() {
         let elem = $(this)
         let data = elem.data('repr')
         let repr = '(' + data.map(e => e.map(f => f % modulo).join(', ')).join(')(') + ')'
-        if (repr === '()') repr = 'Id(sn)'
+        if (repr === '()' || repr === '(0)' || repr === '(1)') repr = 'Id(sn)'
         elem.find('.repr').text('with representant ' + repr)
     })
 }
