@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
 #include <ostream>
 #include <set>
 #include <sstream>
@@ -402,6 +403,32 @@ PROFILE void computeCoprimes(Number &number) {
 
 PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar power_sum, Scalar n_h) {
     return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
+}
+
+PROFILE std::string to_short_string(const Orbit& orbit1, const Function& pi) {
+    std::string result;
+    result += "(";
+    bool first = true;
+    for (const auto e: orbit1) {
+        result += (first ? "" : ", ") + std::to_string(e);
+        first = false;
+    }
+    result += ")";
+    result += "[";
+    first = true;
+    for (const auto e: pi) {
+        result += (first ? "" : ", ") + std::to_string(e);
+        first = false;
+    }
+    result += "]";
+    return result;
+}
+
+PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
+    if (skewMorphism.permutation.orbits.empty()) {
+        return "(1)[0]";
+    }
+    return to_short_string(getOrbit1(skewMorphism), skewMorphism.pi);
 }
 
 PROFILE bool computeFunction(Scalar n, const Function &pi, const Orbit &orbit1, Function &function) {
@@ -863,17 +890,23 @@ PROFILE void computeAutomorphisms(Number &number) {
 //    clear(number);
 }
 
-std::string to_string(const SkewMorphism &skewMorphism) {
+std::string to_string(const Orbit &orbit) {
     std::string result;
-    result.reserve(skewMorphism.n * 7);
+    bool first = true;
+    for (const auto e: orbit) {
+        result += (first ? "" : ", ") + std::to_string(e);
+        first = false;
+    }
+    return result;
+}
+
+std::string to_string(const SkewMorphism &skewMorphism) {
+    if (skewMorphism.permutation.orbits.empty()) {
+        return "Id(sn)";
+    }
+    std::string result;
     for (const auto &orbit: skewMorphism.permutation.orbits) {
-        result += "(";
-        bool first = true;
-        for (const auto e: orbit) {
-            result += (first ? "" : ", ") + std::to_string(e);
-            first = false;
-        }
-        result += ")";
+        result += "(" + to_string(orbit) + ")";
     }
     return result;
 }
@@ -1352,7 +1385,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
             const auto p = ro.d;
             const auto ord_psi = m / p;
-            
+
             const auto &orbit1_ro = getOrbit1(ro);
 
             compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
@@ -1560,6 +1593,114 @@ void clear(Number &number) {
     }
 }
 
+PROFILE SkewMorphism from_short_string(const std::string &string, Scalar n) {
+    SkewMorphism result;
+    std::istringstream stream;
+    stream.str(string);
+    char c = '\0';
+    Orbit orbit1;
+    while (c != ')') {
+        stream.get(c);
+        Scalar i = 0;
+        stream >> i;
+        orbit1.push_back(i);
+        stream.get(c);
+    }
+    Function pi;
+    while (c != ']') {
+        stream.get(c);
+        Scalar i = 0;
+        stream >> i;
+        pi.push_back(i);
+        stream.get(c);
+    }
+    result.d = pi.size();
+    result.r = orbit1.size();
+    result.n = n;
+    if (orbit1.size() == 1) {
+        result.h = 0;
+    } else {
+        result.h = orbit1[1] - 1;
+    }
+    result.pi = std::move(pi);
+    finish(result, orbit1);
+    result.s = apply1(result, result.d % result.n) / result.d;
+    return result;
+}
+
+SkewMorphism quotient(const SkewMorphism &skew) {
+    SkewMorphism ro;
+    ro.n = skew.r;
+    ro.r = skew.d;
+
+    ro.d = 0;
+    Scalar a = 1 % skew.d;
+    const auto pi1 = skew.pi[a];
+    do {
+        ++ro.d;
+        ro.pi.push_back(a);
+        a = apply1(skew, a) % skew.d;
+    } while (skew.pi[a] != pi1);
+
+    finish(ro, skew.pi);
+
+    ro.h = apply1(ro, 1 % ro.n) - 1 % ro.n;
+    ro.s = apply1(ro, ro.d % ro.n) / ro.d;
+
+    return ro;
+}
+
+bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
+    std::string line;
+    std::ifstream ifile;
+
+    SkewSet foundSkews;
+    std::vector<std::vector<std::vector<std::size_t>>> roots;
+
+    ifile = std::ifstream{"../skew/" + std::to_string(n) + "_auto.txt"};
+    if (!ifile.is_open()) {
+        return false;
+    }
+    while (std::getline(ifile, line)) {
+        auto skew = from_short_string(line, n);
+        addSkewMorphism(skew, skewMorphisms, true);
+        computeCoprimes(numberCache[skew.r]);
+        Orbit orbit12(skew.r, 1);
+        for (const auto coprime: numberCache[skew.r].coprimes) {
+            if (coprime <= 1) {
+                continue;
+            }
+            SkewMorphism skew2;
+            skew2.n = skew.n;
+            skew2.r = skew.r;
+            skew2.d = skew.d;
+            skew2.pi = skew.pi;
+            const auto &orbit1 = getOrbit1(skew);
+            for (std::size_t i = 1; i < skew.r; ++i) {
+                orbit12[i] = orbit1[(i * coprime) % skew.r];
+            }
+
+            skew2.h = orbit12[1] - 1;
+            skew2.s = orbit12[1];
+
+            finish(skew2, orbit12);
+
+            addSkewMorphism(std::move(skew2), skewMorphisms, false);
+        }
+    }
+    ifile = std::ifstream{"../skew/" + std::to_string(n) + "_coset.txt"};
+    while (std::getline(ifile, line)) {
+        auto skew = from_short_string(line, n);
+        addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
+    }
+    ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
+    while (std::getline(ifile, line)) {
+        auto skew = from_short_string(line, n);
+        addSkewClassByRepresentant(foundSkews, roots, quotient(skew), skew);
+    }
+    return true;
+}
+
 int main(int argc, char *argv[]) {
     Scalar N = 100;
     if (argc > 1) {
@@ -1599,13 +1740,74 @@ int main(int argc, char *argv[]) {
     for (auto n: computeSet) {
         auto &number = numberCache[n];
 //        if (number.powerOfTwo <= 16 && number.squareFree) {
-            countSkewmorphisms(number);
+            if (!readSkewMorphisms(n, number.skewMorphisms)) {
+                countSkewmorphisms(number);
+            }
 //            fprint(number, std::cerr);
 //        }
         if (getSkewCount(number.skewMorphisms) != number.phi) {
             print(number);
         }
+        std::ofstream file;
+        file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
+        for (const auto &c: number.skewMorphisms.autoClasses) {
+            const auto &skew = number.skewMorphisms.automorphisms[c[0]];
+            file << to_short_string(skew) << std::endl;
+        }
+        file = std::ofstream{"../skew/" + std::to_string(number.n) + "_coset.txt"};
+        for (const auto &c: number.skewMorphisms.preservingClasses) {
+            const auto &skew = number.skewMorphisms.properCosetPreserving[c[0]];
+            file << to_short_string(skew) << std::endl;
+        }
+        file = std::ofstream{"../skew/" + std::to_string(number.n) + "_other.txt"};
+        for (const auto &c: number.skewMorphisms.nonPreservingClasses) {
+            const auto &skew = number.skewMorphisms.properNonPreserving[c[0]];
+            file << to_short_string(skew) << std::endl;
+        }
     }
+
+//    std::ofstream output("skew" + std::to_string(N) + "output.txt");
+//    for (auto n = N; n <= N; ++n) {
+//        auto &number = numberCache[n];
+//        output << "\nn = " << n << std::endl;
+//
+//        auto &skewMorphisms = number.skewMorphisms;
+//
+//        std::sort(skewMorphisms.automorphisms.begin(), skewMorphisms.automorphisms.end(), [](const auto& lhs, const auto &rhs) { return lhs.h < rhs.h; });
+//
+//        for (const auto &skew: skewMorphisms.automorphisms) {
+//            output << "\nSkew morphism " << to_string(skew);
+//            output << "\n of order " << std::to_string(skew.r);
+//            output << "\n with kernel of order " << std::to_string(n / skew.d);
+//            output << "\n and smallest kernel generator " << std::to_string(skew.d);
+//            output << "\n and power function values [ 1 ]" << std::endl;
+//        }
+//
+//        std::sort(skewMorphisms.properCosetPreserving.begin(), skewMorphisms.properCosetPreserving.end(), [](const auto& lhs, const auto &rhs) {return lhs.d < rhs.d; });
+//
+//        for (const auto &skew: skewMorphisms.properCosetPreserving) {
+//            output << "\nSkew morphism " << to_string(skew);
+//            output << "\n of order " << std::to_string(skew.r);
+//            output << "\n with kernel of order " << std::to_string(n / skew.d);
+//            output << "\n and smallest kernel generator " << std::to_string(skew.d);
+//            output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+//        }
+//
+//        std::sort(skewMorphisms.properNonPreserving.begin(), skewMorphisms.properNonPreserving.end(), [](const auto& lhs, const auto &rhs) {return lhs.d < rhs.d; });
+//
+//        for (const auto &skew: skewMorphisms.properNonPreserving) {
+//            output << "\nSkew morphism " << to_string(skew);
+//            output << "\n of order " << std::to_string(skew.r);
+//            output << "\n with kernel of order " << std::to_string(n / skew.d);
+//            output << "\n and smallest kernel generator " << std::to_string(skew.d);
+//            output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+//        }
+//
+//        output << "\nTotal number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms);
+//        output << "\nCheck sub-total of automorphisms of C_" << n << " is " << number.phi << std::endl;
+//
+//        output << "\n.............................................................................." << std::endl;
+//    }
 
     return 0;
 }
