@@ -1573,7 +1573,30 @@ int main(int argc, char *argv[]) {
     //TODO: compute coprimes ale len do N
     prepareNumbers(N * N);
 
-    for (auto n = A; n <= N; ++n) {
+    std::vector<Scalar> computeVector;
+    std::set<Scalar> computeSet;
+    for (Scalar n = A; n <= N; ++n) {
+        computeVector.push_back(n);
+        computeSet.insert(n);
+    }
+    for (std::size_t i = 0; i < computeVector.size(); ++i) {
+        const auto a = computeVector[i];
+        for (const auto d: numberCache[a * numberCache[a].lambda].divisors) {
+            if (d >= a) {
+                continue;
+            }
+            if (isCoprime(numberCache[a], numberCache[d])) {
+                continue;
+            }
+            if (computeSet.find(d) == computeSet.end()) {
+                computeVector.push_back(d);
+                computeSet.insert(d);
+            }
+        }
+    }
+
+//    for (auto n = A; n <= N; ++n) {
+    for (auto n: computeSet) {
         auto &number = numberCache[n];
 //        if (number.powerOfTwo <= 16 && number.squareFree) {
             countSkewmorphisms(number);
