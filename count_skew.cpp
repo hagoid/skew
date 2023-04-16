@@ -6,7 +6,6 @@
 #include <ostream>
 #include <set>
 #include <sstream>
-#include <string_view>
 #include <unordered_set>
 #include <vector>
 #include <memory>
@@ -59,23 +58,14 @@ struct SkewMorphism {
     std::uint64_t hash;
 };
 
-template <typename T>
-PROFILE std::size_t hash_vector(const std::vector<T> &vector) {
-    std::string_view bytestring(reinterpret_cast<const char *>(vector.data()), vector.size() * sizeof(T));
-    return std::hash<std::string_view>{}(bytestring);
-}
-
-template <typename T, std::size_t N>
-PROFILE std::size_t hash_array(const std::array<T, N> &array) {
-    std::string_view bytestring(reinterpret_cast<const char *>(array.data()), N * sizeof(T));
-    return std::hash<std::string_view>{}(bytestring);
-}
+std::uint64_t hash(const CompactSkewMorphism &skew, Scalar n);
 
 struct HashCompact {
     PROFILE std::size_t operator()(const CompactSkewMorphism &compactSkew) const {
-        std::array<std::size_t, 2> sub_hash = {hash_vector(compactSkew.orbit1), hash_vector(compactSkew.pi)};
-        return hash_array(sub_hash);
+        return hash(compactSkew, n);
     }
+
+    Scalar n{0};
 };
 
 struct EqualCompact {
@@ -428,6 +418,7 @@ PROFILE void prepareNumbers(Scalar N) {
     primes.reserve(1.25506 * 2 * std::sqrt(N) / log(N));
     for (Scalar i = 0; i <= N; ++i) {
         auto &number = numberCache[i];
+        number.skewMorphisms.skewIndexMap = SkewIndexMap{0, HashCompact{.n = i}};
         number.n = i;
         factorize(number, primes);
         if (isPowerOfPrime(number) && i == number.primes.back()) {//TODO: isPrime, computePhi to tiez zistuje
@@ -646,8 +637,8 @@ PROFILE std::uint64_t cyrb53(const std::vector<Scalar> &vector, std::uint32_t se
         h2 = (h2 ^ element) * 1597334677;
     }
 
-    h1 = std::uint32_t((h1 ^ (h1 >> 16)) * 2246822507) ^ std::uint32_t((h2 ^ (h2 >> 13)) * 3266489909);
-    h2 = std::uint32_t((h2 ^ (h2 >> 16)) * 2246822507) ^ std::uint32_t((h1 ^ (h1 >> 13)) * 3266489909);
+    h1 = ((h1 ^ (h1 >> 16)) * 2246822507) ^ ((h2 ^ (h2 >> 13)) * 3266489909);
+    h2 = ((h2 ^ (h2 >> 16)) * 2246822507) ^ ((h1 ^ (h1 >> 13)) * 3266489909);
 
     return 4294967296 * (2097151 & h2) + (h1 >> 0);
 }
@@ -665,6 +656,10 @@ PROFILE std::vector<Scalar> toVector(const SkewMorphism &skew) {
 
 PROFILE std::uint64_t hash(const SkewMorphism &skew) {
     return cyrb53(toVector(skew));
+}
+
+PROFILE std::uint64_t hash(const CompactSkewMorphism &skew, Scalar n) {
+    return cyrb53(toVector(skew, n));
 }
 
 PROFILE void computeHashForClass(const Class &c, SkewMorphisms &skewMorphisms) {
