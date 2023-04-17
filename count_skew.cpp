@@ -37,12 +37,12 @@ struct Permutation {
 
 struct CompactSkewMorphism {
     Orbit orbit1;
-    Function pi;
+    Orbit pi;
 };
 
 struct SkewMorphism {
     Permutation permutation;
-    Function pi;
+    Orbit pi;  //TODO: pointer to quotient
     std::vector<Index> free_x;
     std::unordered_map<Scalar, std::vector<Index>> roots;
     std::unordered_map<Scalar, Index> preservingSubgroups;
@@ -488,7 +488,7 @@ PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar p
     return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
 }
 
-PROFILE std::string to_short_string(const Orbit& orbit1, const Function& pi) {
+PROFILE std::string to_short_string(const Orbit& orbit1, const Orbit& pi) {
     std::string result;
     result += "(";
     bool first = true;
@@ -511,7 +511,7 @@ PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
     return to_short_string(getOrbit1(skewMorphism), skewMorphism.pi);
 }
 
-PROFILE bool computeFunction(Scalar n, const Function &pi, const Orbit &orbit1, Function &function) {
+PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Function &function) {
     Scalar oldO = 1;
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
@@ -545,7 +545,7 @@ PROFILE bool computeFunction(Scalar n, const Function &pi, const Orbit &orbit1, 
     return true;
 }
 
-PROFILE Function computeFunction(Scalar n, const Function &pi, const Orbit &orbit1) {
+PROFILE Function computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1) {
     Function function(n, 0);
     if (computeFunction(n, pi, orbit1, function)) {
         return function;
@@ -1269,10 +1269,10 @@ PROFILE std::size_t getProperClassesCount(const SkewMorphisms &skewMorphisms) {
     return result;
 }
 
-PROFILE Function inverse(const Function &function, Scalar n) {
+PROFILE Function positionOnOrbit(const Orbit &orbit, Scalar n) {
     Function result(n, -1);
-    for (Scalar x = 0; x < function.size(); ++x) {
-        result[function[x]] = x;
+    for (Scalar x = 0; x < orbit.size(); ++x) {
+        result[orbit[x]] = x;
     }
     return result;
 }
@@ -1500,7 +1500,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
                 clearOrbit(t);
-                const auto inverse_ro_pi = inverse(ro.pi, d);
+                const auto positionOnRoPi = positionOnOrbit(ro.pi, d);
                 for (const auto power_index: possiblePowerIndices) {
                     const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
 
@@ -1517,7 +1517,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     for (Index i = 0; i < power.max_orbits; ++i) {
                         const auto &orbit = power_orbits[i];
                         const auto modulo = orbit[0] % d;
-                        auto index = inverse_ro_pi[modulo];
+                        auto index = positionOnRoPi[modulo];
                         if (index == -1) {
                             continue;
                         }
@@ -1533,7 +1533,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                         if (!all) {
                             continue;
                         }
-                        index = inverse_ro_pi[modulo];
+                        index = positionOnRoPi[modulo];
                         const auto smallestIndex = index % exponent;
                         const auto offset = index < exponent ? 0 : p_exponent - index / exponent;
                         moduloOrbits[smallestIndex].push_back(OrbitPlace{.orbitIndex = i, .indexOnOrbit = offset});
@@ -1563,7 +1563,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     }
 
                     for (initializeSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power)) {
-                        const Function &pi = orbit1_ro;
+                        const auto &pi = orbit1_ro;
                         if (!computeFunction(n, pi, t, function)) {
                             continue;
                         }
