@@ -479,7 +479,7 @@ PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
 }
 
 PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Function &function) {
-    Scalar oldO = 1;
+    Scalar oldO = orbit1[0];
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
         if (o != 0 && oldO != 0) {
@@ -488,7 +488,7 @@ PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Fun
         oldO = o;
     }
     if (oldO != 0) {
-        function[oldO] = -1;
+        function[oldO] = -orbit1[0];
     }
 
     for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
