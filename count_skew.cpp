@@ -530,11 +530,9 @@ PROFILE Permutation computePermutation(const Orbit::Container &orbit1, const Fun
     auto &orbitSet = numberCache[n].skewMorphisms.orbitSet;
     permutation.orbitFor.resize(n);
     const auto one = 1 % n;
-    for (auto middle = orbit1.begin(); middle != orbit1.end(); ++middle) {
-        auto container2 = std::make_unique<Orbit::Container>(orbit1.size());
-        std::rotate_copy(orbit1.begin(), middle, orbit1.end(), container2->begin());
-        const auto [iterator, inserted] = orbitSet.insert(std::move(container2));
-        permutation.orbitFor[*middle] = Orbit{iterator->get()};
+    const auto [iterator, inserted] = orbitSet.insert(std::make_unique<Orbit::Container>(orbit1));
+    for (std::size_t position = 0; position < orbit1.size(); ++position) {
+        permutation.orbitFor[orbit1[position]] = {iterator->get(), position};
     }
     permutation.orbits.emplace_back(permutation.orbitFor[one]);
     for (Scalar i = 0; i < n; ++i) {
@@ -549,17 +547,13 @@ PROFILE Permutation computePermutation(const Orbit::Container &orbit1, const Fun
             c = function[c];
         } while (c != i);
 
-        bool first = true;
+        const auto [iterator, inserted] = orbitSet.insert(std::make_unique<Orbit::Container>(container));
 
-        for (auto middle = container.begin(); middle != container.end(); ++middle) {
-            auto container2 = std::make_unique<Orbit::Container>(container.size());
-            std::rotate_copy(container.begin(), middle, container.end(), container2->begin());
-            const auto [iterator, inserted] = orbitSet.insert(std::move(container2));
-            permutation.orbitFor[*middle] = Orbit{iterator->get()};
-            if (first && (container.size() > 1 || container[0] == one)) {
-                permutation.orbits.emplace_back(iterator->get());
-            }
-            first = false;
+        for (std::size_t position = 0; position < container.size(); ++position) {
+            permutation.orbitFor[container[position]] = {iterator->get(), position};
+        }
+        if (container.size() > 1 || container[0] == one) {
+            permutation.orbits.emplace_back(iterator->get());
         }
     }
 
