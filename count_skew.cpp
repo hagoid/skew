@@ -2057,6 +2057,10 @@ int main(int argc, char *argv[]) {
     if (argc > 2) {
         A = std::stoi(argv[2]);
     }
+    bool recompute = false;
+    if (argc > 3) {
+        recompute = argv[3] == std::string("--recompute");
+    }
 
     //TODO: compute coprimes ale len do N
     prepareNumbers(N * N);
@@ -2087,7 +2091,7 @@ int main(int argc, char *argv[]) {
     for (auto n: computeSet) {
         auto &number = numberCache[n];
 //        if (number.powerOfTwo <= 16 && number.squareFree) {
-            if (!readSkewMorphisms(n, number.skewMorphisms)) {
+            if (recompute || !readSkewMorphisms(n, number.skewMorphisms)) {
                 countSkewmorphisms(number);
             }
 //            fprint(number, std::cerr);
