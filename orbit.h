@@ -43,13 +43,6 @@ public:
 
     const Container &container() const;
 
-    friend std::strong_ordering operator<=>(const TOrbit<Scalar> &lhs, const TOrbit<Scalar> &rhs) {
-        return lhs.container() <=> rhs.container();
-    }
-
-    friend bool operator==(const TOrbit<Scalar> &lhs, const TOrbit<Scalar> &rhs) {
-        return lhs.container() == rhs.container();
-    }
 private:
     const Container *container_ = nullptr;
     std::size_t position_ = 0;

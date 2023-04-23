@@ -77,7 +77,7 @@ struct HashCompact {
 
 struct EqualCompact {
     PROFILE bool operator()(const CompactSkewMorphism &lhs, const CompactSkewMorphism &rhs) const {
-        return lhs.orbit1 == rhs.orbit1 && lhs.pi == rhs.pi;
+        return lhs.orbit1.container() == rhs.orbit1.container() && lhs.pi.container() == rhs.pi.container();
     }
 };
 
@@ -656,9 +656,9 @@ PROFILE std::uint64_t hash(const CompactSkewMorphism &skew, Scalar n) {
 PROFILE void computeHashForClass(const Class &c, SkewMorphisms &skewMorphisms) {
     auto &skews = skewMorphisms.skews;
     const auto least = std::min_element(skews.begin() + c.begin, skews.begin() + c.end, [](const auto &lhs, const auto &rhs) {
-        auto compareOrbit1 = getOrbit1(*lhs) <=> getOrbit1(*rhs);
+        auto compareOrbit1 = getOrbit1(*lhs).container() <=> getOrbit1(*rhs).container();
         if (compareOrbit1 == std::strong_ordering::equal) {
-            return lhs->pi < rhs->pi;
+            return lhs->pi.container() < rhs->pi.container();
         }
         return compareOrbit1 == std::strong_ordering::less;
     });
@@ -1745,7 +1745,7 @@ struct MatoComparator {
             return false;
         }
 
-        return getOrbit1(lhs) < getOrbit1(rhs);
+        return getOrbit1(lhs).container() < getOrbit1(rhs).container();
     }
 };
 
