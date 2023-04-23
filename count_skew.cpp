@@ -108,7 +108,7 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat es
     const auto &orbit1 = getOrbit1(skewMorphism);
     std::set<Index> set;
     for (std::size_t i = 1; i < orbit1.size(); ++i) {//TODO: preco ideme od 1?
-        const auto index = orbit1[i] % skewMorphism.d;
+        const auto index = orbit1[i] % skewMorphism.d;//TODO: toto je orbita kvocientu kvocientu
         set.insert(index);
     }
     std::copy(set.begin(), set.end(), std::back_inserter(skewMorphism.free_x));
@@ -478,35 +478,45 @@ PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
     return to_short_string(getOrbit1(skewMorphism), skewMorphism.pi);
 }
 
-PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Function &function) {
+PROFILE void cleanup(const Orbit &orbit1, Function &function) {
+    for (const auto o: orbit1) {
+        function[o] = 0;
+    }
+}
+
+PROFILE void initialize(const Orbit &orbit1, Function &function) {
     Scalar oldO = orbit1[0];
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
-        if (o != 0 && oldO != 0) {
-            function[oldO] = -o;
-        }
+        function[oldO] = -o;
         oldO = o;
     }
-    if (oldO != 0) {
-        function[oldO] = -orbit1[0];
-    }
+    function[oldO] = -orbit1[0];
+    function[0] = 0;
+}
 
-    for (std::size_t i1 = 0; i1 < n; i1 += pi.size()) {
-        for (std::size_t i2 = 1; i2 <= pi.size(); ++i2) {
-            const auto i = i1 + i2;
-            if (i >= n) {
-                return true;
-            }
-            auto value = function[i - 1] + orbit1[pi[i2 - 1]];
-            if (value >= n) value -= n;
+PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Function &function) {
+    initialize(orbit1, function);
 
-            if (function[i] < 0 && function[i] != -value) {
-                for (const auto o: orbit1) {
-                    function[o] = 0;
-                }
-                return false;
-            }
-            function[i] = value;
+    Scalar value = 0;
+    auto functionIterator = ++function.begin();
+    auto piIterator = pi.begin();
+    const auto fend = function.end();
+    const auto pend = pi.end();
+    while (functionIterator != fend) {
+        value += orbit1[*piIterator];
+        if (value >= n) value -= n;
+
+        if (*functionIterator < 0 && *functionIterator != -value) {
+            cleanup(orbit1, function);
+            return false;
+        }
+        *functionIterator = value;
+
+        ++functionIterator;
+        ++piIterator;
+        if (piIterator == pend) {
+            piIterator = pi.begin();
         }
     }
     return true;
