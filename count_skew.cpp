@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <vector>
 #include <memory>
+#include <numeric>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -680,12 +681,6 @@ PROFILE void computeRoots(SkewMorphisms &skewMorphisms, Index index) {
     }
 }
 
-PROFILE void computeRoots(SkewMorphisms &skewMorphisms) {
-    for (Index index = 0; index < skewMorphisms.skews.size(); ++index) {
-        computeRoots(skewMorphisms, index);
-    }
-}
-
 PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorphisms, bool newClass) {
     const auto c = skewMorphism.c;
     while (skewMorphisms.classes.size() <= c) {
@@ -704,9 +699,7 @@ PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorph
     skewIndexMap.insert({toCompact(skewMorphism), index});
     skews.emplace_back(std::make_unique<SkewMorphism>(std::move(skewMorphism)));
 
-    if (skewMorphism.c > 2) {
-        computeRoots(skewMorphisms, index);
-    }
+    computeRoots(skewMorphisms, index);
 
     classes.back().end = skews.size();
 }
@@ -834,49 +827,36 @@ PROFILE void sEquals1(const Scalar d, const Number &number_n_div_d, SkewMorphism
 PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorphisms &skewMorphisms) {
     auto &number_d = numberCache[d];
     computeCoprimes(number_d);
-    for (const auto gcd_b: number_n_div_d.divisors) {
-        if (gcd_b == number_n_div_d.n) {
-            continue;
-        }
-        if (gcd_b < d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
-            continue;
-        }
-        auto &number_n_b = numberCache[number_n_div_d.n / gcd_b];
-        computeCoprimes(number_n_b);
-        std::vector<bool> visited_s(number_n_div_d.n, false);//TODO: global
-        std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
-        std::vector<Scalar> powers_s;//TODO: global
-        std::vector<Scalar> powers_e;//TODO: global
-        powers_s.reserve(number_n_div_d.n);
-        powers_e.reserve(number_n_div_d.n);
-//        const auto number_n_b_coprimes = std::move(number_n_b.coprimes);
-        for (const auto coprime_b: number_n_b.coprimes) {
-            const auto b = gcd_b * coprime_b;
-            const auto s = b + 1;
+    std::vector<bool> visited_s(number_n_div_d.n, false);//TODO: global
+    for (const auto &autoClass: number_n_div_d.skewMorphisms.classes[1]) {
+        for (std::size_t autoIndex = autoClass.begin; autoIndex < autoClass.end; ++autoIndex) {
+            const auto &powers_s = getOrbit1(*number_n_div_d.skewMorphisms.skews[autoIndex]);
+            const auto s = powers_s[1];
             if (visited_s[s]) {
                 continue;
             }
-            if (!isCoprime(number_n_div_d, numberCache[s])) {
+            const auto b = s - 1;
+            const auto gcd_b = gcd(number_n_div_d, numberCache[b]);
+            const auto n_b = number_n_div_d.n / gcd_b;
+            const auto coprime_b = b / gcd_b;
+            if (gcd_b == number_n_div_d.n) {
                 continue;
             }
-            DoubleScalar power_s = s;
-            DoubleScalar power_sum = 1;
-            powers_s.clear();
-            powers_s.push_back(1);
-            while (power_s != 1) {
-                power_sum += power_s;
-                powers_s.push_back(power_s);
-                power_s = (power_s * s) % number_n_div_d.n;
+            if (gcd_b < d) {//TODO: nejaky lepsi check? vnutri? toto skoro nic nerobi aj tak sa to dost skoro zahodi
+                continue;
             }
+            auto &number_n_b = numberCache[n_b];
+            computeCoprimes(number_n_b);
+            std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
+            std::vector<Scalar> powers_e;//TODO: global
+            powers_e.reserve(number_n_div_d.n);
+            auto power_sum = std::accumulate(powers_s.begin(), powers_s.end(), DoubleScalar{0});
             const Scalar rH = powers_s.size();
             auto &number_rH = numberCache[rH];
             computeCoprimes(number_rH);
             for (const auto coprime_rH: number_rH.coprimes) {
                 visited_s[powers_s[coprime_rH]] = true;
             }
-//            if (number_rH.n != number_n_b.n) {
-//                clear(number_rH);
-//            }
             power_sum = power_sum % number_n_div_d.n;//TODO: treba toto modulovat? alias n_div_d
             const auto power_sum_b = power_sum / number_n_b.n;
             const auto min_r = d * rH;//TODO: better estimate?
@@ -1000,7 +980,7 @@ PROFILE void computeAutomorphisms(Number &number) {
     const auto one = 1 % n;
     std::vector<bool> visited_s(number.n, false);//TODO: global
     CompactSkewMorphism compact;
-    auto &powers_s = compact.orbit1;
+    std::vector<Scalar> powers_s;
     powers_s.reserve(number.n);
     compact.pi = {1};
     for (const auto s: number.coprimes) {
@@ -1016,14 +996,26 @@ PROFILE void computeAutomorphisms(Number &number) {
         }
         const Scalar r = powers_s.size();
         auto &number_r = numberCache[r];
-        computeCoprimes(number_r);
-        for (const auto coprime_rH: number_r.coprimes) {
-            visited_s[powers_s[coprime_rH]] = true;
+        for (const auto rH: number_r.divisors) {
+            const auto g = r / rH;
+            if (visited_s[powers_s[g % r]]) {
+                continue;
+            }
+            auto &number_rH = numberCache[rH];
+
+            computeCoprimes(number_rH);
+            for (const auto coprime_rH: number_rH.coprimes) {
+                visited_s[powers_s[g * coprime_rH]] = true;
+            }
+
+            compact.orbit1.clear();
+            for (Index i = 0; i < r; i += g) {
+                compact.orbit1.push_back(powers_s[i]);
+            }
+            compact.pi[0] = 1 % rH;
+
+            addSkewClassByRepresentant(compact, n);
         }
-
-        compact.pi[0] = 1 % r;
-
-        addSkewClassByRepresentant(compact, n);
     }
 //    clear(number);
 }
@@ -1770,15 +1762,11 @@ PROFILE void countSkewmorphisms(Number &number) {
         }
         number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
 
-        computeRoots(number.skewMorphisms);
-
         if (number.powerOfTwo > 16 || !number.squareFree) {
             computeProperNotPreserving(number);
         }
     } else {
         number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
-
-        computeRoots(number.skewMorphisms);
     }
 }
 
@@ -1883,8 +1871,6 @@ bool readSkewMorphisms(Scalar n, SkewMorphisms &skewMorphisms) {
         addSkewClassByRepresentant(skew, n);
     }
     skewMorphisms.preservingEnd = skewMorphisms.skews.size();
-
-    computeRoots(skewMorphisms);
 
     ifile = std::ifstream{"../skew/" + std::to_string(n) + "_other.txt"};
     while (std::getline(ifile, line)) {
