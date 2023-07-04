@@ -46,7 +46,12 @@ public:
     SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &pi);
     SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi);
 
-    Permutation permutation;
+    const Orbits &orbits() const;
+    const Orbit &orbit1() const;
+    Scalar orbit1(std::size_t index) const;
+
+    const Permutation &permutation() const;
+
     Orbit pi;  //TODO: pointer to quotient
     std::unordered_map<Scalar, std::vector<Index>> roots;
     std::unordered_map<Scalar, Index> preservingSubgroups;
@@ -60,7 +65,26 @@ public:
     bool inverseOrbit = false;
     bool powerOfInverseOrbit = false;
     std::uint64_t hash;  // TODO: checkni ci nie su rovnake
+
+private:
+    Permutation _permutation;
 };
+
+const Orbits &SkewMorphism::orbits() const {
+    return _permutation.orbits;
+}
+
+const Orbit &SkewMorphism::orbit1() const {
+    return _permutation.orbits[0];
+}
+
+Scalar SkewMorphism::orbit1(std::size_t index) const {
+    return orbit1()[index];
+}
+
+const Permutation &SkewMorphism::permutation() const {
+    return _permutation;
+}
 
 std::uint64_t hash(const CompactSkewMorphism &skew, Scalar n);
 
@@ -88,10 +112,6 @@ struct Class {
     Index representant;
 };
 using Classes = std::vector<Class>;
-
-PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
-    return skewMorphism.permutation.orbits[0];
-}
 
 PROFILE bool isIdentity(const SkewMorphism &skewMorphism) {
     return skewMorphism.r == 1;
@@ -124,14 +144,14 @@ PROFILE void computePreservingSubgroups(SkewMorphism &skewMorphism) {
     const auto &number = numberCache[skewMorphism.n];
     for (const auto d: number.divisors) {
         const auto &number_d = numberCache[skewMorphism.n / d];
-        const auto &place = skewMorphism.permutation.places[d % skewMorphism.n];
+        const auto &place = skewMorphism.permutation().places[d % skewMorphism.n];
         const auto one = 1 % number_d.n;
         CompactSkewMorphism compact;
         if (place.orbitIndex == -1) {
             compact.orbit1 = {one};
             compact.pi = {0};
         } else {
-            const auto &orbit = skewMorphism.permutation.orbits[place.orbitIndex];
+            const auto &orbit = skewMorphism.permutation().orbits[place.orbitIndex];
             auto indexOnOrbit = place.indexOnOrbit + 1;
             if (indexOnOrbit >= orbit.size()) {
                 indexOnOrbit -= orbit.size();
@@ -442,7 +462,7 @@ PROFILE std::string to_short_string(const Orbit& orbit1, const Orbit& pi) {
 }
 
 PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
-    return to_short_string(getOrbit1(skewMorphism), skewMorphism.pi);
+    return to_short_string(skewMorphism.orbit1(), skewMorphism.pi);
 }
 
 PROFILE void cleanup(const Orbit &orbit1, Function &function) {
@@ -567,7 +587,7 @@ PROFILE SkewMorphism::SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &p
 }
 
 PROFILE CompactSkewMorphism toCompact(const SkewMorphism &skewMorphism) {
-    return {getOrbit1(skewMorphism), skewMorphism.pi};
+    return {skewMorphism.orbit1(), skewMorphism.pi};
 }
 
 SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index);
@@ -576,14 +596,14 @@ const SkewMorphism &quotient(const SkewMorphism &skew);
 PROFILE SkewMorphism &powerOf(const SkewMorphism &skewMorphism, const std::pair<Scalar, Index> &sub, SkewMorphisms &skewMorphisms) {
     const auto e = sub.first;
     const auto r = skewMorphism.r / e;
-    const auto &orbit1 = getOrbit1(skewMorphism);
+    const auto &orbit1 = skewMorphism.orbit1();
     const auto &roOther = getSkewByIndex(numberCache[r].skewMorphisms, sub.second);
     CompactSkewMorphism compactOther;
     compactOther.orbit1.reserve(r);
     for (std::size_t i = 0; i < skewMorphism.r; i += e) {
         compactOther.orbit1.push_back(orbit1[i]);
     }
-    compactOther.pi = getOrbit1(roOther);
+    compactOther.pi = roOther.orbit1();
     return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
 }
 
@@ -680,22 +700,20 @@ void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Scalar n) {
 std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms);//TODO: remove
 
 SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
-        : permutation(std::move(permutation))
+        : _permutation(std::move(permutation))
         , pi(pi)  // TODO: do not copy but shrink to fit
         , n(n) {
-    const auto &orbit1 = getOrbit1(*this);
-
-    r = orbit1.size();
+    r = orbit1().size();
     d = this->pi.size();
 
     const Scalar one = 1 % this->n;
     const Scalar one_pi = 1 % r;
 
-    h = orbit1[one_pi] - one;
+    h = orbit1(one_pi) - one;
 
     DoubleScalar _s = 0;
     for (const auto e: this->pi) {
-        _s += orbit1[e];
+        _s += orbit1(e);
     }
 
     s = (_s % this->n) / d;
@@ -705,7 +723,7 @@ SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
     Scalar _d = d;
     while (_r != 1) {
         for (const auto rCandidate: numberCache[_r].divisors) {
-            if ((orbit1[rCandidate] - 1) % _d == 0) {
+            if ((orbit1(rCandidate) - 1) % _d == 0) {
                 _r = rCandidate;
                 break;
             }
@@ -730,12 +748,11 @@ SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
         return;
     }
 
-    auto &orbits = this->permutation.orbits;
-    max_orbits = std::count_if(orbits.begin(), orbits.end(),
+    max_orbits = std::count_if(orbits().begin(), orbits().end(),
                                [this](const auto &orbit) { return orbit.size() == r; });  // TODO: od zaciatku idu
 
     const auto inverse1 = this->n - 1;
-    for (const auto o: orbit1) {
+    for (const auto o: orbit1()) {
         if (o == inverse1) {
             inverseOrbit = true;
             powerOfInverseOrbit = true;
@@ -812,7 +829,7 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
     std::vector<bool> visited_s(number_n_div_d.n, false);//TODO: global
     for (const auto &autoClass: number_n_div_d.skewMorphisms.classes[1]) {
         for (std::size_t autoIndex = autoClass.begin; autoIndex < autoClass.end; ++autoIndex) {
-            const auto &powers_s = getOrbit1(*number_n_div_d.skewMorphisms.skews[autoIndex]);
+            const auto &powers_s = number_n_div_d.skewMorphisms.skews[autoIndex]->orbit1();
             const auto s = powers_s[1];
             if (visited_s[s]) {
                 continue;
@@ -1017,7 +1034,7 @@ std::string to_string(const SkewMorphism &skewMorphism) {
         return "Id(sn)";
     }
     std::string result;
-    for (const auto &orbit: skewMorphism.permutation.orbits) {
+    for (const auto &orbit: skewMorphism.orbits()) {
         result += "(" + to_string(orbit) + ")";
     }
     return result;
@@ -1039,7 +1056,7 @@ std::string to_json(const SkewMorphism &skewMorphism) {
     std::string result;
     bool first = true;
     result += "[";
-    for (const auto &orbit: skewMorphism.permutation.orbits) {
+    for (const auto &orbit: skewMorphism.orbits()) {
         result += (first ? "" : ",") + to_json(orbit);
         first = false;
     }
@@ -1114,8 +1131,8 @@ PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorph
     const std::size_t orbitSize = power.r;
     const auto e = t[i];
 
-    const auto &place = power.permutation.places[e];
-    const auto &orbit = power.permutation.orbits[place.orbitIndex];
+    const auto &place = power.permutation().places[e];
+    const auto &orbit = power.permutation().orbits[place.orbitIndex];
 
     std::size_t index = place.indexOnOrbit;
     for (std::size_t j = p + i; j < t.size(); j += p) {
@@ -1161,8 +1178,8 @@ PROFILE bool compareOrbits(const Orbit &sparseOrbit, const Orbit &orbit2) {
 
 PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const Orbit &orbit1) {
     for (std::size_t a = 0; a < p; ++a) {
-        const auto &place = power.permutation.places[orbit1[a]];
-        const auto &orbit = power.permutation.orbits[place.orbitIndex];
+        const auto &place = power.permutation().places[orbit1[a]];
+        const auto &orbit = power.permutation().orbits[place.orbitIndex];
         std::size_t indexOnOrbit = place.indexOnOrbit;
         for (std::size_t i = a + p; i < orbit1.size(); i += p) {
             ++indexOnOrbit;
@@ -1360,16 +1377,16 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
             const auto coprime_n_inverse = (n + inverse(n, coprime_n)) % n;
             const auto coprime_d = coprime_n % d;
 
-            const auto &coprime_n_place = phi.permutation.places[coprime_n];
-            const auto &coprime_n_orbit = phi.permutation.orbits[coprime_n_place.orbitIndex];
+            const auto &coprime_n_place = phi.permutation().places[coprime_n];
+            const auto &coprime_n_orbit = phi.permutation().orbits[coprime_n_place.orbitIndex];
             std::size_t index = coprime_n_place.indexOnOrbit;
             for (std::size_t i = 1; i < r; ++i) {
                 index += coprime_r;
                 if (index >= r) index -= r;
                 orbit1[i] = (coprime_n_orbit[index] * coprime_n_inverse) % n;
             }
-            const auto &coprime_r_place = ro.permutation.places[coprime_r];
-            const auto &coprime_r_orbit = ro.permutation.orbits[coprime_r_place.orbitIndex];
+            const auto &coprime_r_place = ro.permutation().places[coprime_r];
+            const auto &coprime_r_orbit = ro.permutation().orbits[coprime_r_place.orbitIndex];
             index = coprime_r_place.indexOnOrbit;
             for (std::size_t i = 1; i < d; ++i) {
                 index += coprime_d;
@@ -1393,10 +1410,10 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
 CompactSkewMorphism compactQuotient(const SkewMorphism &skew);
 
 PROFILE bool quotientEquals(const SkewMorphism &skew, const SkewMorphism &quotient) {
-    if (skew.pi != getOrbit1(quotient)) {
+    if (skew.pi != quotient.orbit1()) {
         return false;
     }
-    const auto &orbit1 = getOrbit1(skew);
+    const auto &orbit1 = skew.orbit1();
     const auto d = skew.d;
     for (std::size_t i = 0; i < quotient.d; ++i) {
         if (orbit1[i] % d != quotient.pi[i]) {
@@ -1457,7 +1474,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
             const auto p = ro.d;
 
-            const auto &orbit1_ro = getOrbit1(ro);
+            const auto &orbit1_ro = ro.orbit1();
 
             compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
 
@@ -1484,7 +1501,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 if (power.r != ord_power) {
                     continue;
                 }
-                if (getOrbit1(power)[p_exponent] % d != 1) {
+                if (power.orbit1(p_exponent) % d != 1) {
                     continue;
                 }
                 if (power.max_orbits < exponent) {
@@ -1495,7 +1512,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     continue;
                 }
 
-                const auto &power_orbits = power.permutation.orbits;
+                const auto &power_orbits = power.orbits();
 
                 for (std::size_t i = 0; i < exponent; ++i) {
                     moduloOrbits[i].clear();
@@ -1717,7 +1734,7 @@ struct MatoComparator {
             return false;
         }
 
-        return getOrbit1(lhs) < getOrbit1(rhs);
+        return lhs.orbit1() < rhs.orbit1();
     }
 };
 
@@ -1812,7 +1829,7 @@ PROFILE CompactSkewMorphism fromString(const std::string &string, Scalar n) {
 }
 
 PROFILE CompactSkewMorphism compactQuotient(const SkewMorphism &skew) {
-    const auto &orbit1 = getOrbit1(skew);
+    const auto &orbit1 = skew.orbit1();
     Orbit ro_pi;
     const auto one = 1 % skew.d;
     ro_pi.push_back(one);
@@ -1901,7 +1918,7 @@ void printMato(std::ofstream &output, const SkewMorphism &skew, bool old = false
         if (isIdentity(skew)) {
             line += "Id(sn)";
         } else {
-            auto orbits = skew.permutation.orbits;
+            auto orbits = skew.orbits();
             std::sort(orbits.begin(), orbits.end(), [](const auto &lhs, const auto &rhs) {return lhs[0] < rhs[0];});
             for (const auto &orbit: orbits) {
                 line += "(" + to_string(orbit) + ")";
