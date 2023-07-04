@@ -44,7 +44,6 @@ struct CompactSkewMorphism {
 struct SkewMorphism {
     Permutation permutation;
     Orbit pi;  //TODO: pointer to quotient
-    std::vector<Index> free_x;
     std::unordered_map<Scalar, std::vector<Index>> roots;
     std::unordered_map<Scalar, Index> preservingSubgroups;
     Scalar n = 0;
@@ -94,7 +93,7 @@ PROFILE bool isIdentity(const SkewMorphism &skewMorphism) {
     return skewMorphism.r == 1;
 }
 
-PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj free_x rata a shrinkuje a inverseOrbituje
+PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj shrinkuje a inverseOrbituje
     if (isIdentity(skewMorphism)) {
         skewMorphism.max_orbits = skewMorphism.n;
         skewMorphism.inverseOrbit = true;
@@ -107,13 +106,6 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat es
                                             [r = skewMorphism.r](const auto &orbit) { return orbit.size() == r; });//TODO: od zaciatku idu
 
     const auto &orbit1 = getOrbit1(skewMorphism);
-    std::set<Index> set;
-    for (std::size_t i = 1; i < orbit1.size(); ++i) {//TODO: preco ideme od 1?
-        const auto index = orbit1[i] % skewMorphism.d;//TODO: toto je orbita kvocientu kvocientu
-        set.insert(index);
-    }
-    std::copy(set.begin(), set.end(), std::back_inserter(skewMorphism.free_x));
-
     const auto inverse1 = skewMorphism.n - 1;
     for (const auto o: orbit1) {
         if (o == inverse1) {
@@ -128,7 +120,6 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat es
     }
     skewMorphism.permutation.places.shrink_to_fit();
     skewMorphism.pi.shrink_to_fit();
-    skewMorphism.free_x.shrink_to_fit();
 }
 
 struct SkewMorphisms {
@@ -1495,8 +1486,8 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
                 std::vector<Index> free_x_index;
                 std::set<Index> set;
-                for (const auto index: ro.free_x) {
-                    set.insert(index % exponent);
+                for (const auto index: orbit1_ro) {
+                    set.insert(index % exponent);  // TODO: toto je orbita automorfizmu mod exponent
                 }
                 std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
