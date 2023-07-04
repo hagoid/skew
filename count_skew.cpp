@@ -1455,6 +1455,13 @@ PROFILE void computeProperNotPreserving(Number &number) {
             const auto exponent = numberCache[p].primes[0];
             const auto p_exponent = p / exponent;
 
+            std::vector<Index> free_x_index;
+            std::set<Index> set;
+            for (const auto index: orbit1_ro) {
+                set.insert(index % exponent);  // TODO: toto je orbita automorfizmu mod exponent
+            }
+            std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
+
             for (std::size_t psi_class_index = 0; psi_class_index < getPreservingClassesCount(number.skewMorphisms); ++psi_class_index) {  // TODO: uz by som mohol itervoat cez vsetky nie, cez coset a ich power
                 const auto psi_index = getPreservingClassIndex(number.skewMorphisms, psi_class_index);
 
@@ -1483,13 +1490,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 }
 
                 const auto &possiblePowerIndices = psiRoots->second;
-
-                std::vector<Index> free_x_index;
-                std::set<Index> set;
-                for (const auto index: orbit1_ro) {
-                    set.insert(index % exponent);  // TODO: toto je orbita automorfizmu mod exponent
-                }
-                std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
                 clearOrbit(t);
                 const auto positionOnRoPi = positionOnOrbit(ro.pi, d);
