@@ -56,7 +56,7 @@ struct SkewMorphism {
     Scalar max_orbits = 0;
     bool inverseOrbit = false;
     bool powerOfInverseOrbit = false;
-    std::uint64_t hash;
+    std::uint64_t hash;  // TODO: checkni ci nie su rovnake
 };
 
 std::uint64_t hash(const CompactSkewMorphism &skew, Scalar n);
@@ -1077,7 +1077,7 @@ PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const Orbits &or
                 c_j[orbit[oi]] = orbit[(oi + compact.orbit1.size() - j) % orbit.size()];  // TODO: compact.orbit1.size() je order?
             }
         }
-        for (Scalar aa = 1; aa < n; ++aa) {
+        for (Scalar aa = 1; aa < n; ++aa) {//TODO: potrebujem?
             if (c_j[aa] == 0) {
                 c_j[aa] = aa;
             }
@@ -1464,7 +1464,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
             const auto exponent = numberCache[p].primes[0];
             const auto p_exponent = p / exponent;
 
-            for (std::size_t psi_class_index = 0; psi_class_index < getPreservingClassesCount(number.skewMorphisms); ++psi_class_index) {
+            for (std::size_t psi_class_index = 0; psi_class_index < getPreservingClassesCount(number.skewMorphisms); ++psi_class_index) {  // TODO: uz by som mohol itervoat cez vsetky nie, cez coset a ich power
                 const auto psi_index = getPreservingClassIndex(number.skewMorphisms, psi_class_index);
 
 //            for (std::size_t psi_index = 0; psi_index < getPreservingSkewCount(number.skewMorphisms); ++psi_index) {
