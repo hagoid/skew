@@ -93,7 +93,7 @@ PROFILE bool isIdentity(const SkewMorphism &skewMorphism) {
     return skewMorphism.r == 1;
 }
 
-PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj shrinkuje a inverseOrbituje
+PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj inverseOrbituje
     if (isIdentity(skewMorphism)) {
         skewMorphism.max_orbits = skewMorphism.n;
         skewMorphism.inverseOrbit = true;
@@ -113,13 +113,6 @@ PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat es
             skewMorphism.powerOfInverseOrbit = true;
         }
     }
-
-    skewMorphism.permutation.orbits.shrink_to_fit();
-    for (auto &orbit: skewMorphism.permutation.orbits) {
-        orbit.shrink_to_fit();
-    }
-    skewMorphism.permutation.places.shrink_to_fit();
-    skewMorphism.pi.shrink_to_fit();
 }
 
 struct SkewMorphisms {
@@ -573,6 +566,13 @@ PROFILE Permutation computePermutation(const Orbit &orbit1, const Function &func
             permutation.places[e].orbitIndex = i;
         }
     }
+
+    permutation.orbits.shrink_to_fit();
+    for (auto &orbit: permutation.orbits) {
+        orbit.shrink_to_fit();
+    }
+    permutation.places.shrink_to_fit();
+
     return permutation;
 }
 
