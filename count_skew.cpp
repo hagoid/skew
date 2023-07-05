@@ -52,7 +52,9 @@ public:
 
     const Permutation &permutation() const;
 
-    Orbit pi;  //TODO: pointer to quotient
+    const Orbit &pi() const;
+    Scalar pi(std::size_t index) const;
+
     std::unordered_map<Scalar, std::vector<Index>> roots;
     std::unordered_map<Scalar, Index> preservingSubgroups;
     Scalar n = 0;
@@ -68,6 +70,7 @@ public:
 
 private:
     Permutation _permutation;
+    Orbit _pi;  //TODO: pointer to quotient
 };
 
 const Orbits &SkewMorphism::orbits() const {
@@ -84,6 +87,14 @@ Scalar SkewMorphism::orbit1(std::size_t index) const {
 
 const Permutation &SkewMorphism::permutation() const {
     return _permutation;
+}
+
+const Orbit &SkewMorphism::pi() const {
+    return _pi;
+}
+
+Scalar SkewMorphism::pi(std::size_t index) const {
+    return pi()[index];
 }
 
 std::uint64_t hash(const CompactSkewMorphism &skew, Scalar n);
@@ -170,8 +181,8 @@ PROFILE void computePreservingSubgroups(SkewMorphism &skewMorphism) {
             }
             const auto one_pi = 1 % orbit.size();
             compact.pi.push_back(one_pi);
-            for (std::size_t i = d % skewMorphism.d; skewMorphism.pi[i] % orbit.size() != one_pi; i = (i + d) % skewMorphism.d) {
-                compact.pi.push_back(skewMorphism.pi[i] % orbit.size());
+            for (std::size_t i = d % skewMorphism.d; skewMorphism.pi(i) % orbit.size() != one_pi; i = (i + d) % skewMorphism.d) {
+                compact.pi.push_back(skewMorphism.pi(i) % orbit.size());
             }
         }
         const auto index = number_d.skewMorphisms.skewIndexMap.find(compact)->second;
@@ -462,7 +473,7 @@ PROFILE std::string to_short_string(const Orbit& orbit1, const Orbit& pi) {
 }
 
 PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
-    return to_short_string(skewMorphism.orbit1(), skewMorphism.pi);
+    return to_short_string(skewMorphism.orbit1(), skewMorphism.pi());
 }
 
 PROFILE void cleanup(const Orbit &orbit1, Function &function) {
@@ -587,7 +598,7 @@ PROFILE SkewMorphism::SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &p
 }
 
 PROFILE CompactSkewMorphism toCompact(const SkewMorphism &skewMorphism) {
-    return {skewMorphism.orbit1(), skewMorphism.pi};
+    return {skewMorphism.orbit1(), skewMorphism.pi()};
 }
 
 SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index);
@@ -701,10 +712,10 @@ std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms);//TODO: r
 
 SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
         : _permutation(std::move(permutation))
-        , pi(pi)  // TODO: do not copy but shrink to fit
+        , _pi(pi)  // TODO: do not copy but shrink to fit
         , n(n) {
     r = orbit1().size();
-    d = this->pi.size();
+    d = this->pi().size();
 
     const Scalar one = 1 % this->n;
     const Scalar one_pi = 1 % r;
@@ -712,7 +723,7 @@ SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
     h = orbit1(one_pi) - one;
 
     DoubleScalar _s = 0;
-    for (const auto e: this->pi) {
+    for (const auto e: this->pi()) {
         _s += orbit1(e);
     }
 
@@ -733,7 +744,7 @@ SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
             break;
         }
         for (const auto dCandidate: numberCache[_d].divisors) {
-            if ((this->pi[dCandidate] - 1) % _r == 0) {
+            if ((this->pi(dCandidate) - 1) % _r == 0) {
                 _d = dCandidate;
                 break;
             }
@@ -1194,7 +1205,7 @@ PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const O
 
 PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
     for (std::size_t i = 1; i < ro.d; ++i) {
-        if (orbit1[i] % ro.r != ro.pi[i]) {
+        if (orbit1[i] % ro.r != ro.pi(i)) {
             return false;
         }
     }
@@ -1410,13 +1421,13 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
 CompactSkewMorphism compactQuotient(const SkewMorphism &skew);
 
 PROFILE bool quotientEquals(const SkewMorphism &skew, const SkewMorphism &quotient) {
-    if (skew.pi != quotient.orbit1()) {
+    if (skew.pi() != quotient.orbit1()) {
         return false;
     }
     const auto &orbit1 = skew.orbit1();
     const auto d = skew.d;
     for (std::size_t i = 0; i < quotient.d; ++i) {
-        if (orbit1[i] % d != quotient.pi[i]) {
+        if (orbit1[i] % d != quotient.pi(i)) {
             return false;
         }
     }
@@ -1490,7 +1501,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
             std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
             clearOrbit(t);
-            const auto positionOnRoPi = positionOnOrbit(ro.pi, d);
+            const auto positionOnRoPi = positionOnOrbit(ro.pi(), d);
 
             const auto &powerQuotient = getSkewByIndex(numberCache[ord_power].skewMorphisms, ro.preservingSubgroups.find(exponent)->second);
 
@@ -1528,7 +1539,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     for (std::size_t j = 1; j < orbit.size(); ++j) {
                         index += exponent;
                         if (index >= p) index -= p;
-                        if (orbit[j] % d != ro.pi[index]) {
+                        if (orbit[j] % d != ro.pi(index)) {
                             all = false;
                             break;
                         }
@@ -1629,8 +1640,8 @@ struct MatoComparator {
             if (lhs.h != rhs.h) {
                 return lhs.h < rhs.h;
             }
-            if (lhs.pi[1] != rhs.pi[1]) {
-                return lhs.pi[1] < rhs.pi[1];
+            if (lhs.pi(1) != rhs.pi(1)) {
+                return lhs.pi(1) < rhs.pi(1);
             }
             return false;
         }
@@ -1839,7 +1850,7 @@ PROFILE CompactSkewMorphism compactQuotient(const SkewMorphism &skew) {
         }
     }
     ro_pi.shrink_to_fit();
-    return {skew.pi, ro_pi};
+    return {skew.pi(), ro_pi};
 }
 
 PROFILE const SkewMorphism &quotient(const SkewMorphism &skew) {
@@ -1932,7 +1943,7 @@ void printMato(std::ofstream &output, const SkewMorphism &skew, bool old = false
         if (skew.d == 1) {
             output << "\n and power function values [ 1 ]" << std::endl;
         } else {
-            output << "\n and power function values [ " << to_string(skew.pi) << " ]" << std::endl;
+            output << "\n and power function values [ " << to_string(skew.pi()) << " ]" << std::endl;
         }
         output << "\n  and with periodicity " << std::to_string(quotient(skew).d);
     } else {
@@ -1943,9 +1954,9 @@ void printMato(std::ofstream &output, const SkewMorphism &skew, bool old = false
                 line += ", 1";
             }
         } else {
-            line += to_string(skew.pi);
+            line += to_string(skew.pi());
             for (int i = 1; i < skew.n / skew.d; ++i) {
-                line += ", " + to_string(skew.pi);
+                line += ", " + to_string(skew.pi());
             }
         }
         line += " ]";
@@ -1967,7 +1978,7 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::strin
         const auto &power = powerOf(skew, sub, number.skewMorphisms);
         output << " roots-" << power.hash;
     }
-    output << "' id='" << skew.hash << "' data-repr='" << to_json(skew) << "' data-pi='" << to_json(skew.pi) << "'><pre>";
+    output << "' id='" << skew.hash << "' data-repr='" << to_json(skew) << "' data-pi='" << to_json(skew.pi()) << "'><pre>";
     output << "\nSkew morphsim class of size " << classSize << " <a class='link' href='#" << skew.hash << "'>#</a>";
     output << "\n  <span class='repr'></span>";
     output << "\n  of order " << std::to_string(skew.r);
@@ -1977,7 +1988,7 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::strin
     if (skew.d == 1) {
         output << "\n  and power function values [ 1 ]";
     } else {
-        output << "\n  and power function values [ " << to_string(skew.pi) << " ]";
+        output << "\n  and power function values [ " << to_string(skew.pi()) << " ]";
     }
     output << " <a href='" << skew.r << ".html?auto=true&coset=true&other=true&inv=true#" << q.hash << "'>#</a>";
     output << "\n  and with periodicity " << std::to_string(q.d);
