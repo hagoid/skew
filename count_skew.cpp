@@ -41,7 +41,11 @@ struct CompactSkewMorphism {
     Orbit pi;
 };
 
-struct SkewMorphism {
+class SkewMorphism {
+public:
+    SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &pi);
+    SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi);
+
     Permutation permutation;
     Orbit pi;  //TODO: pointer to quotient
     std::unordered_map<Scalar, std::vector<Index>> roots;
@@ -91,28 +95,6 @@ PROFILE const Orbit& getOrbit1(const SkewMorphism &skewMorphism) {
 
 PROFILE bool isIdentity(const SkewMorphism &skewMorphism) {
     return skewMorphism.r == 1;
-}
-
-PROFILE void computeMaxOrbits(SkewMorphism &skewMorphism) {//TODO: premenovat este to aj inverseOrbituje
-    if (isIdentity(skewMorphism)) {
-        skewMorphism.max_orbits = skewMorphism.n;
-        skewMorphism.inverseOrbit = true;
-        skewMorphism.powerOfInverseOrbit = true;
-        return;
-    }
-
-    auto &orbits = skewMorphism.permutation.orbits;
-    skewMorphism.max_orbits = std::count_if(orbits.begin(), orbits.end(),
-                                            [r = skewMorphism.r](const auto &orbit) { return orbit.size() == r; });//TODO: od zaciatku idu
-
-    const auto &orbit1 = getOrbit1(skewMorphism);
-    const auto inverse1 = skewMorphism.n - 1;
-    for (const auto o: orbit1) {
-        if (o == inverse1) {
-            skewMorphism.inverseOrbit = true;
-            skewMorphism.powerOfInverseOrbit = true;
-        }
-    }
 }
 
 struct SkewMorphisms {
@@ -580,14 +562,8 @@ PROFILE Permutation computePermutation(Scalar n, const Orbit &pi, const Orbit &o
     return computePermutation(orbit1, computeFunction(n, pi, orbit1));
 }
 
-PROFILE void finish(SkewMorphism &skewMorphism, Permutation permutation) {
-    skewMorphism.permutation = std::move(permutation);
-    computeMaxOrbits(skewMorphism);
-}
-
-PROFILE void finish(SkewMorphism &skewMorphism, const Orbit &orbit1) {
-    const auto n = skewMorphism.n;
-    finish(skewMorphism, computePermutation(n, skewMorphism.pi, orbit1));
+PROFILE SkewMorphism::SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &pi)
+        : SkewMorphism(n, computePermutation(n, pi, orbit1), pi) {
 }
 
 PROFILE CompactSkewMorphism toCompact(const SkewMorphism &skewMorphism) {
@@ -703,53 +679,68 @@ void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Scalar n) {
 
 std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms);//TODO: remove
 
-PROFILE SkewMorphism fromCompact(const CompactSkewMorphism &compact, Scalar n) {
-    const auto &orbit1 = compact.orbit1;
-    const auto &pi = compact.pi;
+SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
+        : permutation(std::move(permutation))
+        , pi(pi)  // TODO: do not copy but shrink to fit
+        , n(n) {
+    const auto &orbit1 = getOrbit1(*this);
 
-    SkewMorphism skew;
-    skew.n = n;
-    skew.r = orbit1.size();
-    skew.d = pi.size();
+    r = orbit1.size();
+    d = this->pi.size();
 
-    const Scalar one = 1 % skew.n;
-    const Scalar one_pi = 1 % skew.r;
+    const Scalar one = 1 % this->n;
+    const Scalar one_pi = 1 % r;
 
-    skew.h = orbit1[one_pi] - one;
+    h = orbit1[one_pi] - one;
 
-    DoubleScalar s = 0;
-    for (const auto e: pi) {
-        s += orbit1[e];
+    DoubleScalar _s = 0;
+    for (const auto e: this->pi) {
+        _s += orbit1[e];
     }
 
-    skew.s = (s % skew.n) / skew.d;
+    s = (_s % this->n) / d;
 
-    skew.c = 0;
-    Scalar r = skew.r;
-    Scalar d = skew.d;
-    while (r != 1) {
-        for (const auto rCandidate: numberCache[r].divisors) {
-            if ((orbit1[rCandidate] - 1) % d == 0) {
-                r = rCandidate;
+    c = 0;
+    Scalar _r = r;
+    Scalar _d = d;
+    while (_r != 1) {
+        for (const auto rCandidate: numberCache[_r].divisors) {
+            if ((orbit1[rCandidate] - 1) % _d == 0) {
+                _r = rCandidate;
                 break;
             }
         }
-        ++skew.c;
-        if (d == 1) {
+        ++c;
+        if (_d == 1) {
             break;
         }
-        for (const auto dCandidate: numberCache[d].divisors) {
-            if ((pi[dCandidate] - 1) % r == 0) {
-                d = dCandidate;
+        for (const auto dCandidate: numberCache[_d].divisors) {
+            if ((this->pi[dCandidate] - 1) % _r == 0) {
+                _d = dCandidate;
                 break;
             }
         }
-        ++skew.c;
+        ++c;
     }
 
-    skew.pi = compact.pi;  // TODO: do not copy
+    if (isIdentity(*this)) {
+        max_orbits = this->n;
+        inverseOrbit = true;
+        powerOfInverseOrbit = true;
+        return;
+    }
 
-    return skew;
+    auto &orbits = this->permutation.orbits;
+    max_orbits = std::count_if(orbits.begin(), orbits.end(),
+                               [this](const auto &orbit) { return orbit.size() == r; });  // TODO: od zaciatku idu
+
+    const auto inverse1 = this->n - 1;
+    for (const auto o: orbit1) {
+        if (o == inverse1) {
+            inverseOrbit = true;
+            powerOfInverseOrbit = true;
+        }
+    }
 }
 
 PROFILE void sEquals1(const Scalar d, const Number &number_n_div_d, SkewMorphisms &skewMorphisms) {
@@ -1323,8 +1314,7 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
         return;
     }
 
-    auto phi = fromCompact(compact, n);
-    finish(phi, std::move(permutation));
+    auto phi = SkewMorphism(n, std::move(permutation), compact.pi);
 
     addSkewMorphism(phi, number.skewMorphisms, true);
 
@@ -1382,9 +1372,8 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
                 continue;
             }
 
-            // TODO: tuto by sa dalo usetrit na pocitani fromCompact
-            auto phi2 = fromCompact(compactSkewMorphism2, n);
-            finish(phi2, orbit1);
+            // TODO: tuto by sa dalo usetrit na pocitani pri inicializacii
+            auto phi2 = SkewMorphism(n, compactSkewMorphism2.orbit1, compactSkewMorphism2.pi);
             addSkewMorphism(phi2, number.skewMorphisms, false);
         }
     }
