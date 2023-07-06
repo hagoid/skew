@@ -644,7 +644,7 @@ PROFILE void computeRoots(SkewMorphisms &skewMorphisms, Index index) {
         if (skewMorphism.powerOfInverseOrbit) {
             other.powerOfInverseOrbit = true;
         }
-        other.roots[e].push_back(index);
+        other.roots[e].push_back(index);  // TODO: aktualne nevyuzivam
     }
 }
 
@@ -1110,12 +1110,12 @@ PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const Orbits &or
     return good;
 }
 
-PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorphism &psi, Orbit &t) {
-    const std::size_t orbitSize = psi.r;
+PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorphism &power, Orbit &t) {
+    const std::size_t orbitSize = power.r;
     const auto e = t[i];
 
-    const auto &place = psi.permutation.places[e];
-    const auto &orbit = psi.permutation.orbits[place.orbitIndex];
+    const auto &place = power.permutation.places[e];
+    const auto &orbit = power.permutation.orbits[place.orbitIndex];
 
     std::size_t index = place.indexOnOrbit;
     for (std::size_t j = p + i; j < t.size(); j += p) {
@@ -1159,10 +1159,10 @@ PROFILE bool compareOrbits(const Orbit &sparseOrbit, const Orbit &orbit2) {
     return true;
 }
 
-PROFILE bool checkPsiCycles(const Scalar p, const SkewMorphism &psi, const Orbit &orbit1) {
+PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const Orbit &orbit1) {
     for (std::size_t a = 0; a < p; ++a) {
-        const auto &place = psi.permutation.places[orbit1[a]];
-        const auto &orbit = psi.permutation.orbits[place.orbitIndex];
+        const auto &place = power.permutation.places[orbit1[a]];
+        const auto &orbit = power.permutation.orbits[place.orbitIndex];
         std::size_t indexOnOrbit = place.indexOnOrbit;
         for (std::size_t i = a + p; i < orbit1.size(); i += p) {
             ++indexOnOrbit;
@@ -1190,6 +1190,15 @@ PROFILE SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t i
 
 PROFILE std::size_t getSkewCount(const SkewMorphisms &skewMorphisms) {
     return skewMorphisms.skews.size();
+}
+
+PROFILE std::size_t getClassIndex(const SkewMorphisms &skewMorphisms, std::size_t index) {
+    std::size_t i = 0;
+    while (index >= skewMorphisms.classes[i].size()) {
+        index -= skewMorphisms.classes[i].size();
+        ++i;
+    }
+    return skewMorphisms.classes[i][index].begin;
 }
 
 PROFILE std::size_t getClassesCount(const SkewMorphisms &skewMorphisms) {
@@ -1416,8 +1425,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
         Orbit &orbit1 = compactSkewMorphism.orbit1;
         orbit1.clear();
         orbit1.resize(r, 0);
-//        for (std::size_t ro_class_index = 0; ro_class_index < getProperClassesCount(number_m.skewMorphisms); ++ro_class_index) {
-//            const auto ro_index = getProperClassIndex(number_m.skewMorphisms, ro_class_index);
 
         for (std::size_t ro_index = 0; ro_index < getProperSkewCount(number_m.skewMorphisms); ++ro_index) {
             const auto &ro = getProperSkewByIndex(number_m.skewMorphisms, ro_index);
@@ -1435,7 +1442,6 @@ PROFILE void computeProperNotPreserving(Number &number) {
             }
 
             const auto p = ro.d;
-            const auto ord_psi = m / p;
 
             const auto &orbit1_ro = getOrbit1(ro);
 
@@ -1443,6 +1449,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
             const auto exponent = numberCache[p].primes[0];
             const auto p_exponent = p / exponent;
+            const auto ord_power = m / exponent;
 
             std::vector<Index> free_x_index;
             std::set<Index> set;
@@ -1451,134 +1458,116 @@ PROFILE void computeProperNotPreserving(Number &number) {
             }
             std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
-            for (std::size_t psi_class_index = 0; psi_class_index < getPreservingClassesCount(number.skewMorphisms); ++psi_class_index) {  // TODO: uz by som mohol itervoat cez vsetky nie, cez coset a ich power
-                const auto psi_index = getPreservingClassIndex(number.skewMorphisms, psi_class_index);
+            for (std::size_t power_class_index = 0; power_class_index < getClassesCount(number.skewMorphisms); ++power_class_index) {
+                const auto power_index = getClassIndex(number.skewMorphisms, power_class_index);
+                const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
 
-//            for (std::size_t psi_index = 0; psi_index < getPreservingSkewCount(number.skewMorphisms); ++psi_index) {
-                const auto &psi = getPreservingSkewByIndex(number.skewMorphisms, psi_index);
-
-                if (psi.h == 0) {
+                if (power.r != ord_power) {
                     continue;
                 }
-                if (psi.r != ord_psi) {
+                if (getOrbit1(power)[p_exponent] % d != 1) {
                     continue;
                 }
-                if (psi.h % d != 0) {
+                if (power.max_orbits < exponent) {
                     continue;
                 }
-                if (psi.max_orbits < p) {
-                    continue;
-                }
-                if (ro.s != psi.pi[1 % psi.d]) {
-                    continue;
-                }
-
-                const auto psiRoots = psi.roots.find(p_exponent);
-                if (psiRoots == psi.roots.end()) {
-                    continue;
-                }
-
-                const auto &possiblePowerIndices = psiRoots->second;
 
                 clearOrbit(t);
                 const auto positionOnRoPi = positionOnOrbit(ro.pi, d);
-                for (const auto power_index: possiblePowerIndices) {
-                    const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
 
-                    if (ro.preservingSubgroups.find(exponent)->second != numberCache[r / exponent].skewMorphisms.skewIndexMap.find(
-                            compactQuotient(power))->second) {
+                if (ro.preservingSubgroups.find(exponent)->second != numberCache[ord_power].skewMorphisms.skewIndexMap.find(
+                        compactQuotient(power))->second) {
+                    continue;
+                }
+
+                const auto &power_orbits = power.permutation.orbits;
+
+                for (std::size_t i = 0; i < exponent; ++i) {
+                    moduloOrbits[i].clear();
+                }
+                for (Index i = 0; i < power.max_orbits; ++i) {
+                    const auto &orbit = power_orbits[i];
+                    const auto modulo = orbit[0] % d;
+                    auto index = positionOnRoPi[modulo];
+                    if (index == -1) {
                         continue;
                     }
-
-                    const auto &power_orbits = power.permutation.orbits;
-
-                    for (std::size_t i = 0; i < exponent; ++i) {
-                        moduloOrbits[i].clear();
-                    }
-                    for (Index i = 0; i < power.max_orbits; ++i) {
-                        const auto &orbit = power_orbits[i];
-                        const auto modulo = orbit[0] % d;
-                        auto index = positionOnRoPi[modulo];
-                        if (index == -1) {
-                            continue;
-                        }
-                        bool all = true;
-                        for (std::size_t j = 1; j < orbit.size(); ++j) {
-                            index += exponent;
-                            if (index >= p) index -= p;
-                            if (orbit[j] % d != ro.pi[index]) {
-                                all = false;
-                                break;
-                            }
-                        }
-                        if (!all) {
-                            continue;
-                        }
-                        index = positionOnRoPi[modulo];
-                        const auto smallestIndex = index % exponent;
-                        const auto offset = index < exponent ? 0 : p_exponent - index / exponent;
-                        moduloOrbits[smallestIndex].push_back(OrbitPlace{.orbitIndex = i, .indexOnOrbit = offset});
-                    }
-                    bool allModulos = true;
-                    for (Index i = 0; i < exponent; ++i) {
-                        if (moduloOrbits[i].empty()) {
-                            allModulos = false;
+                    bool all = true;
+                    for (std::size_t j = 1; j < orbit.size(); ++j) {
+                        index += exponent;
+                        if (index >= p) index -= p;
+                        if (orbit[j] % d != ro.pi[index]) {
+                            all = false;
                             break;
                         }
                     }
-                    if (!allModulos) {
+                    if (!all) {
+                        continue;
+                    }
+                    index = positionOnRoPi[modulo];
+                    const auto smallestIndex = index % exponent;
+                    const auto offset = index < exponent ? 0 : p_exponent - index / exponent;
+                    moduloOrbits[smallestIndex].push_back(OrbitPlace{.orbitIndex = i, .indexOnOrbit = offset});
+                }
+                bool allModulos = true;
+                for (Index i = 0; i < exponent; ++i) {
+                    if (moduloOrbits[i].empty()) {
+                        allModulos = false;
+                        break;
+                    }
+                }
+                if (!allModulos) {
+                    continue;
+                }
+
+                std::vector<std::vector<Scalar>> free_x_values;
+                free_x_values.reserve(free_x_index.size());
+                for (const auto index: free_x_index) {
+                    free_x_values.emplace_back();
+//                        free_x_values.back().reserve(n_div_d);
+                    for (const auto moduloOrbitPlace: moduloOrbits[index]) {
+                        const auto &orbit = power_orbits[moduloOrbitPlace.orbitIndex];
+                        for (std::size_t i = moduloOrbitPlace.indexOnOrbit; i < orbit.size(); i += p_exponent) {
+                            free_x_values.back().push_back(orbit[i]);
+                        }
+                    }
+                }
+
+                for (initializeSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power)) {
+                    const auto &pi = orbit1_ro;
+                    if (!computeFunction(n, pi, t, function)) {
+                        continue;
+                    }
+                    if (!isPermutation(function)) {
                         continue;
                     }
 
-                    std::vector<std::vector<Scalar>> free_x_values;
-                    free_x_values.reserve(free_x_index.size());
-                    for (const auto index: free_x_index) {
-                        free_x_values.emplace_back();
-//                        free_x_values.back().reserve(n_div_d);
-                        for (const auto moduloOrbitPlace: moduloOrbits[index]) {
-                            const auto &orbit = power_orbits[moduloOrbitPlace.orbitIndex];
-                            for (std::size_t i = moduloOrbitPlace.indexOnOrbit; i < orbit.size(); i += p_exponent) {
-                                free_x_values.back().push_back(orbit[i]);
-                            }
-                        }
+                    if (!computeOrbit1(function, orbit1)) {
+                        continue;
                     }
 
-                    for (initializeSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power)) {
-                        const auto &pi = orbit1_ro;
-                        if (!computeFunction(n, pi, t, function)) {
-                            continue;
-                        }
-                        if (!isPermutation(function)) {
-                            continue;
-                        }
-
-                        if (!computeOrbit1(function, orbit1)) {
-                            continue;
-                        }
-
-                        if (!checkFirstPMod(ro, orbit1)) {
-                            continue;
-                        }
-                        //TODO: ktore checky treba robit?
-                        if (!compareOrbits(t, orbit1)) {
-                            continue;
-                        }
-                        if (!checkPsiCycles(exponent, power, orbit1)) {
-                            continue;
-                        }
-
-                        if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
-                            continue;
-                        }
-
-                        auto permutation = computePermutation(orbit1, function);
-
-                        if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
-                            continue;
-                        }
-
-                        addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
+                    if (!checkFirstPMod(ro, orbit1)) {
+                        continue;
                     }
+                    //TODO: ktore checky treba robit?
+                    if (!compareOrbits(t, orbit1)) {
+                        continue;
+                    }
+                    if (!checkPowerCycles(exponent, power, orbit1)) {
+                        continue;
+                    }
+
+                    if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
+                        continue;
+                    }
+
+                    auto permutation = computePermutation(orbit1, function);
+
+                    if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
+                        continue;
+                    }
+
+                    addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
                 }
             }
         }
