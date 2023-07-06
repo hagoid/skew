@@ -1392,6 +1392,20 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
 
 CompactSkewMorphism compactQuotient(const SkewMorphism &skew);
 
+PROFILE bool quotientEquals(const SkewMorphism &skew, const SkewMorphism &quotient) {
+    if (skew.pi != getOrbit1(quotient)) {
+        return false;
+    }
+    const auto &orbit1 = getOrbit1(skew);
+    const auto d = skew.d;
+    for (std::size_t i = 0; i < quotient.d; ++i) {
+        if (orbit1[i] % d != quotient.pi[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 //TODO: zoradit podla radu
 //TODO: kanonicke poradie autov, aj cosetov
 
@@ -1458,6 +1472,11 @@ PROFILE void computeProperNotPreserving(Number &number) {
             }
             std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
 
+            clearOrbit(t);
+            const auto positionOnRoPi = positionOnOrbit(ro.pi, d);
+
+            const auto &powerQuotient = getSkewByIndex(numberCache[ord_power].skewMorphisms, ro.preservingSubgroups.find(exponent)->second);
+
             for (std::size_t power_class_index = 0; power_class_index < getClassesCount(number.skewMorphisms); ++power_class_index) {
                 const auto power_index = getClassIndex(number.skewMorphisms, power_class_index);
                 const auto &power = getSkewByIndex(number.skewMorphisms, power_index);
@@ -1472,11 +1491,7 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     continue;
                 }
 
-                clearOrbit(t);
-                const auto positionOnRoPi = positionOnOrbit(ro.pi, d);
-
-                if (ro.preservingSubgroups.find(exponent)->second != numberCache[ord_power].skewMorphisms.skewIndexMap.find(
-                        compactQuotient(power))->second) {
+                if (!quotientEquals(power, powerQuotient)) {
                     continue;
                 }
 
