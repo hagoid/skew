@@ -1383,7 +1383,7 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
 
             // TODO: tuto by sa dalo usetrit na pocitani pri inicializacii
             auto phi2 = SkewMorphism(n, compactSkewMorphism2.orbit1, compactSkewMorphism2.pi);
-            addSkewMorphism(phi2, number.skewMorphisms, false);
+            addSkewMorphism(std::move(phi2), number.skewMorphisms, false);
         }
     }
     auto &c = number.skewMorphisms.classes[phi.c].back();
