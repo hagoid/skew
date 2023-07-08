@@ -167,9 +167,9 @@ private:
     Scalar n;
 };
 
-OrbitWrapper::Iterator::Iterator(const OrbitWrapper &orbitWrapper, Index index, bool first) : orbitWrapper(orbitWrapper), index(index), first(first) {}
+PROFILE OrbitWrapper::Iterator::Iterator(const OrbitWrapper &orbitWrapper, Index index, bool first) : orbitWrapper(orbitWrapper), index(index), first(first) {}
 
-Scalar OrbitWrapper::Iterator::operator*() const {
+PROFILE Scalar OrbitWrapper::Iterator::operator*() const {
     DoubleScalar value;
     if (orbitWrapper.get().orbit == nullptr) {
         value = index;
@@ -179,7 +179,7 @@ Scalar OrbitWrapper::Iterator::operator*() const {
     return (value * orbitWrapper.get().multiplier) % orbitWrapper.get().n;
 }
 
-OrbitWrapper::Iterator &OrbitWrapper::Iterator::operator++() {
+PROFILE OrbitWrapper::Iterator &OrbitWrapper::Iterator::operator++() {
     if (orbitWrapper.get().orbit != nullptr) {
         index += orbitWrapper.get().exponent;
         if (index >= orbitWrapper.get().orbit->size()) {
@@ -190,34 +190,34 @@ OrbitWrapper::Iterator &OrbitWrapper::Iterator::operator++() {
     return *this;
 }
 
-bool operator!=(const OrbitWrapper::Iterator &lhs, const OrbitWrapper::Iterator &rhs) {
+PROFILE bool operator!=(const OrbitWrapper::Iterator &lhs, const OrbitWrapper::Iterator &rhs) {
     return lhs.index != rhs.index || lhs.first != rhs.first || &lhs.orbitWrapper.get() != &rhs.orbitWrapper.get();
 }
 
-OrbitWrapper::OrbitWrapper(const OrbitContainer &orbit, Index indexOnOrbit, Scalar multiplier, Scalar exponent, Scalar n) : orbit(&orbit), indexOnOrbit(indexOnOrbit), multiplier(multiplier), exponent(exponent), n(n) {
+PROFILE OrbitWrapper::OrbitWrapper(const OrbitContainer &orbit, Index indexOnOrbit, Scalar multiplier, Scalar exponent, Scalar n) : orbit(&orbit), indexOnOrbit(indexOnOrbit), multiplier(multiplier), exponent(exponent), n(n) {
     exponent %= size();
 }
 
-OrbitWrapper::OrbitWrapper(Scalar element, Scalar n) : indexOnOrbit(element), n(n) {}
+PROFILE OrbitWrapper::OrbitWrapper(Scalar element, Scalar n) : indexOnOrbit(element), n(n) {}
 
-OrbitWrapper &OrbitWrapper::operator*=(Scalar m) {
+PROFILE OrbitWrapper &OrbitWrapper::operator*=(Scalar m) {
     multiplier = (multiplier * static_cast<DoubleScalar>(m)) % n;
     return *this;
 }
 
-OrbitWrapper &OrbitWrapper::operator^=(Scalar e) {
+PROFILE OrbitWrapper &OrbitWrapper::operator^=(Scalar e) {
     exponent = (exponent * static_cast<DoubleScalar>(e)) % size();
     return *this;
 }
 
-Scalar OrbitWrapper::operator[](std::size_t index) const {
+PROFILE Scalar OrbitWrapper::operator[](std::size_t index) const {
     if (orbit == nullptr) {
         return *begin();
     }
     return *Iterator{*this, static_cast<Index>((indexOnOrbit + static_cast<DoubleScalar>(index) * exponent) % size()), true};
 }
 
-bool operator!=(const OrbitWrapper &lhs, const OrbitWrapper &rhs) {
+PROFILE bool operator!=(const OrbitWrapper &lhs, const OrbitWrapper &rhs) {
     if (lhs.size() != rhs.size()) {
         return true;
     }
@@ -233,7 +233,7 @@ bool operator!=(const OrbitWrapper &lhs, const OrbitWrapper &rhs) {
     return false;
 }
 
-bool operator<(const OrbitWrapper &lhs, const OrbitWrapper &rhs) {
+PROFILE bool operator<(const OrbitWrapper &lhs, const OrbitWrapper &rhs) {
     auto literator = lhs.begin();
     auto riterator = rhs.begin();
     while (literator != lhs.end() || riterator != rhs.end()) {
@@ -255,29 +255,29 @@ bool operator<(const OrbitWrapper &lhs, const OrbitWrapper &rhs) {
     return false;
 }
 
-OrbitWrapper::operator OrbitContainer() const {  // TODO: bez tohto a bez templatov
+PROFILE OrbitWrapper::operator OrbitContainer() const {  // TODO: bez tohto a bez templatov
     OrbitContainer result;
     result.reserve(size());
     std::transform(begin(), end(), std::back_inserter(result), [](const auto &a) {return a;});
     return result;
 }
 
-std::size_t OrbitWrapper::size() const {
+PROFILE std::size_t OrbitWrapper::size() const {
     if (orbit == nullptr) {
         return 1;
     }
     return orbit->size();
 }
 
-OrbitWrapper::Iterator OrbitWrapper::begin() const noexcept {
+PROFILE OrbitWrapper::Iterator OrbitWrapper::begin() const noexcept {
     return {*this, indexOnOrbit, true};
 }
 
-OrbitWrapper::Iterator OrbitWrapper::end() const noexcept {
+PROFILE OrbitWrapper::Iterator OrbitWrapper::end() const noexcept {
     return {*this, indexOnOrbit, false};
 }
 
-bool OrbitWrapper::isSingleElement() const {
+PROFILE bool OrbitWrapper::isSingleElement() const {
     return orbit == nullptr;
 }
 
@@ -304,36 +304,36 @@ private:
     const SkewMorphism *quotient;
 };
 
-WeakClassRepresentant::WeakClassRepresentant(Permutation permutation, const SkewMorphism *quotient) : _permutation(std::move(permutation)), quotient(quotient){}
+PROFILE WeakClassRepresentant::WeakClassRepresentant(Permutation permutation, const SkewMorphism *quotient) : _permutation(std::move(permutation)), quotient(quotient){}
 
-const OrbitsContainer &WeakClassRepresentant::orbits() const {
+PROFILE const OrbitsContainer &WeakClassRepresentant::orbits() const {
     return _permutation.orbits;
 }
 
-const OrbitContainer & WeakClassRepresentant::orbit1() const {
+PROFILE const OrbitContainer & WeakClassRepresentant::orbit1() const {
     return _permutation.orbits[0];
 }
 
-Scalar WeakClassRepresentant::orbit1(std::size_t index) const {
+PROFILE Scalar WeakClassRepresentant::orbit1(std::size_t index) const {
     return orbit1()[index];
 }
 
-old::OrbitWrapper WeakClassRepresentant::orbitOf(Scalar element) const {
+PROFILE old::OrbitWrapper WeakClassRepresentant::orbitOf(Scalar element) const {
     return {_permutation.orbits, _permutation.places[element]};
 }
 
-OrbitWrapper::OrbitWrapper(const old::OrbitWrapper &orbitWrapper, Scalar n) : OrbitWrapper(orbitWrapper.place.indexOnOrbit, n)
+PROFILE OrbitWrapper::OrbitWrapper(const old::OrbitWrapper &orbitWrapper, Scalar n) : OrbitWrapper(orbitWrapper.place.indexOnOrbit, n)
 {
     if (!orbitWrapper.isSingleElement()) {
         orbit = &orbitWrapper.orbits[orbitWrapper.place.orbitIndex];
     }
 }
 
-Scalar WeakClassRepresentant::n() const {
+PROFILE Scalar WeakClassRepresentant::n() const {
     return _permutation.places.size();
 }
 
-Scalar WeakClassRepresentant::r() const {
+PROFILE Scalar WeakClassRepresentant::r() const {
     return _permutation.orbits[0].size();
 }
 
@@ -370,66 +370,66 @@ private:
     Scalar eInv;
 };
 
-Scalar WeakClassRepresentant::d() const {
+PROFILE Scalar WeakClassRepresentant::d() const {
     if (quotient == nullptr) {
         return 1;
     }
     return quotient->orbit1().size();
 }
 
-OrbitWrapper WeakClassRepresentant::quotientOrbitOf(Scalar element) const {
+PROFILE OrbitWrapper WeakClassRepresentant::quotientOrbitOf(Scalar element) const {
     if (quotient == nullptr) {
         return {0, 1};
     }
     return quotient->orbitOf(element);
 }
 
-OrbitWrapper SkewMorphism::orbit1() const {
+PROFILE OrbitWrapper SkewMorphism::orbit1() const {
     return orbitOf(1);
 }
 
-Scalar SkewMorphism::orbit1(std::size_t index) const {
+PROFILE Scalar SkewMorphism::orbit1(std::size_t index) const {
     return orbit1()[index];
 }
 
-OrbitWrapper SkewMorphism::orbitOf(Scalar element) const {
+PROFILE OrbitWrapper SkewMorphism::orbitOf(Scalar element) const {
     OrbitWrapper result{representant.orbitOf((static_cast<DoubleScalar>(element) * a) % n()), n()};
     result *= aInv;
     result ^= e;
     return result;
 }
 
-OrbitWrapper SkewMorphism::pi() const {
+PROFILE OrbitWrapper SkewMorphism::pi() const {
     auto result = representant.quotientOrbitOf(e % r());
     result *= eInv;
     result ^= a;
     return result;
 }
 
-Scalar SkewMorphism::pi(std::size_t index) const {
+PROFILE Scalar SkewMorphism::pi(std::size_t index) const {
     return pi()[index];
 }
 
-Scalar SkewMorphism::n() const {
+PROFILE Scalar SkewMorphism::n() const {
     return representant.n();
 }
 
-Scalar SkewMorphism::d() const {
+PROFILE Scalar SkewMorphism::d() const {
     return representant.d();
 }
 
-Scalar SkewMorphism::r() const {
+PROFILE Scalar SkewMorphism::r() const {
     return representant.r();
 }
 
-Scalar SkewMorphism::h() const {
+PROFILE Scalar SkewMorphism::h() const {
     const Scalar one = 1 % n();
     const Scalar one_pi = 1 % r();
 
     return orbit1(one_pi) - one;
 }
 
-Scalar SkewMorphism::s() const {
+PROFILE Scalar SkewMorphism::s() const {
     DoubleScalar _s = 0;
     for (const auto e: this->pi()) {
         _s += orbit1(e);
@@ -1054,7 +1054,7 @@ void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Scalar n) {
 
 std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms);//TODO: remove
 
-SkewMorphism::SkewMorphism(const WeakClassRepresentant &representant, Scalar a, Scalar e)
+PROFILE SkewMorphism::SkewMorphism(const WeakClassRepresentant &representant, Scalar a, Scalar e)
         : representant(representant)
         , a(a)
         , e(e) {
@@ -1063,18 +1063,18 @@ SkewMorphism::SkewMorphism(const WeakClassRepresentant &representant, Scalar a, 
     powerOfInverseOrbit = inverseOrbit();
 }
 
-Scalar SkewMorphism::c() const {
+PROFILE Scalar SkewMorphism::c() const {
     return representant.c();
 }
 
-Scalar WeakClassRepresentant::c() const {
+PROFILE Scalar WeakClassRepresentant::c() const {
     if (r() == 1) {
         return 0;
     }
     return quotient->c() + 1;
 }
 
-Scalar WeakClassRepresentant::max_orbits() const {
+PROFILE Scalar WeakClassRepresentant::max_orbits() const {
     if (isIdentity(*this)) {
         return n();
     }
@@ -1088,7 +1088,7 @@ Scalar WeakClassRepresentant::max_orbits() const {
     return result;
 }
 
-bool SkewMorphism::inverseOrbit() const {
+PROFILE bool SkewMorphism::inverseOrbit() const {
     if (isIdentity(*this)) {
         return true;
     }
