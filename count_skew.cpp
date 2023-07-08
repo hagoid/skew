@@ -22,8 +22,8 @@ using Scalar = std::int32_t;
 using DoubleScalar = std::int64_t;
 using Index = Scalar;
 
-using Orbit = std::vector<Scalar>;
-using Orbits = std::vector<Orbit>;
+using OrbitContainer = std::vector<Scalar>;
+using OrbitsContainer = std::vector<OrbitContainer>;
 using Function = std::vector<Scalar>;
 
 struct OrbitPlace {
@@ -33,21 +33,21 @@ struct OrbitPlace {
 using OrbitPlaces = std::vector<OrbitPlace>;
 
 struct Permutation {
-    Orbits orbits;
+    OrbitsContainer orbits;
     OrbitPlaces places;
 };
 
 struct CompactSkewMorphism {
-    Orbit orbit1;
-    Orbit pi;
+    OrbitContainer orbit1;
+    OrbitContainer pi;
 };
 
 class OrbitWrapper {
 public:
     class Iterator {
     public:
-        Iterator(const Orbit &orbit, Index index);
-        Iterator(const Orbit &orbit, Index index, std::size_t size);
+        Iterator(const OrbitContainer &orbit, Index index);
+        Iterator(const OrbitContainer &orbit, Index index, std::size_t size);
 
         const Scalar &operator*() const;
         Iterator &operator+=(Index increment);
@@ -56,12 +56,12 @@ public:
         friend bool operator!=(const Iterator &lhs, const Iterator &rhs);
 
     private:
-        const Orbit &orbit;
+        const OrbitContainer &orbit;
         std::size_t index;
         std::size_t size;
     };
 
-    OrbitWrapper(const Orbits& orbits, const OrbitPlace &place);
+    OrbitWrapper(const OrbitsContainer& orbits, const OrbitPlace &place);
 
     std::size_t size() const;
     Iterator begin() const noexcept;
@@ -71,13 +71,13 @@ public:
     bool isSingleElement() const;
 
 private:
-    const Orbits &orbits;
+    const OrbitsContainer &orbits;
     const OrbitPlace &place;
 };
 
-OrbitWrapper::Iterator::Iterator(const Orbit &orbit, Index index) : Iterator(orbit, index, orbit.size()) {}
+OrbitWrapper::Iterator::Iterator(const OrbitContainer &orbit, Index index) : Iterator(orbit, index, orbit.size()) {}
 
-OrbitWrapper::Iterator::Iterator(const Orbit &orbit, Index index, std::size_t size) : orbit(orbit), index(index), size(size) {}
+OrbitWrapper::Iterator::Iterator(const OrbitContainer &orbit, Index index, std::size_t size) : orbit(orbit), index(index), size(size) {}
 
 const Scalar &OrbitWrapper::Iterator::operator*() const {
     return orbit[index];
@@ -103,7 +103,7 @@ bool operator!=(const OrbitWrapper::Iterator &lhs, const OrbitWrapper::Iterator 
     return lhs.index != rhs.index;
 }
 
-OrbitWrapper::OrbitWrapper(const Orbits &orbits, const OrbitPlace &place) : orbits(orbits), place(place) {}
+OrbitWrapper::OrbitWrapper(const OrbitsContainer &orbits, const OrbitPlace &place) : orbits(orbits), place(place) {}
 
 std::size_t OrbitWrapper::size() const {
     return orbits[place.orbitIndex].size();
@@ -127,15 +127,15 @@ bool OrbitWrapper::isSingleElement() const {
 
 class SkewMorphism {
 public:
-    SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &pi);
-    SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi);
+    SkewMorphism(Scalar n, const OrbitContainer &orbit1, const OrbitContainer &pi);
+    SkewMorphism(Scalar n, Permutation permutation, const OrbitContainer &pi);
 
-    const Orbits &orbits() const;
-    const Orbit &orbit1() const;
+    const OrbitsContainer &orbits() const;
+    const OrbitContainer &orbit1() const;
     Scalar orbit1(std::size_t index) const;
     OrbitWrapper orbitOf(Scalar element) const;
 
-    const Orbit &pi() const;
+    const OrbitContainer &pi() const;
     Scalar pi(std::size_t index) const;
 
     std::unordered_map<Scalar, std::vector<Index>> roots;
@@ -153,14 +153,14 @@ public:
 
 private:
     Permutation _permutation;
-    Orbit _pi;  //TODO: pointer to quotient
+    OrbitContainer _pi;  //TODO: pointer to quotient
 };
 
-const Orbits &SkewMorphism::orbits() const {
+const OrbitsContainer &SkewMorphism::orbits() const {
     return _permutation.orbits;
 }
 
-const Orbit &SkewMorphism::orbit1() const {
+const OrbitContainer &SkewMorphism::orbit1() const {
     return _permutation.orbits[0];
 }
 
@@ -172,7 +172,7 @@ OrbitWrapper SkewMorphism::orbitOf(Scalar element) const {
     return {_permutation.orbits, _permutation.places[element]};
 }
 
-const Orbit &SkewMorphism::pi() const {
+const OrbitContainer &SkewMorphism::pi() const {
     return _pi;
 }
 
@@ -530,7 +530,7 @@ PROFILE Scalar compute_a(Scalar d, Scalar power_sum_e, Scalar rH, DoubleScalar p
     return (((power_sum_e - d) / rH + n_h) * power_sum + d) % n_h;//TODO: optimize
 }
 
-PROFILE std::string to_short_string(const Orbit& orbit1, const Orbit& pi) {
+PROFILE std::string to_short_string(const OrbitContainer& orbit1, const OrbitContainer& pi) {
     std::string result;
     result += "(";
     bool first = true;
@@ -553,13 +553,13 @@ PROFILE std::string to_short_string(const SkewMorphism &skewMorphism) {
     return to_short_string(skewMorphism.orbit1(), skewMorphism.pi());
 }
 
-PROFILE void cleanup(const Orbit &orbit1, Function &function) {
+PROFILE void cleanup(const OrbitContainer &orbit1, Function &function) {
     for (const auto o: orbit1) {
         function[o] = 0;
     }
 }
 
-PROFILE void initialize(const Orbit &orbit1, Function &function) {
+PROFILE void initialize(const OrbitContainer &orbit1, Function &function) {
     Scalar oldO = orbit1[0];
     for (std::size_t i = 1; i < orbit1.size(); ++i) {
         const auto o = orbit1[i];
@@ -570,7 +570,7 @@ PROFILE void initialize(const Orbit &orbit1, Function &function) {
     function[0] = 0;
 }
 
-PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Function &function) {
+PROFILE bool computeFunction(Scalar n, const OrbitContainer &pi, const OrbitContainer &orbit1, Function &function) {
     initialize(orbit1, function);
 
     Scalar value = 0;
@@ -597,7 +597,7 @@ PROFILE bool computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1, Fun
     return true;
 }
 
-PROFILE Function computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1) {
+PROFILE Function computeFunction(Scalar n, const OrbitContainer &pi, const OrbitContainer &orbit1) {
     Function function(n, 0);
     if (computeFunction(n, pi, orbit1, function)) {
         return function;
@@ -605,7 +605,7 @@ PROFILE Function computeFunction(Scalar n, const Orbit &pi, const Orbit &orbit1)
     return {};
 }
 
-PROFILE Permutation computePermutation(const Orbit &orbit1, const Function &function) {//TODO: zjednotit
+PROFILE Permutation computePermutation(const OrbitContainer &orbit1, const Function &function) {//TODO: zjednotit
     Permutation permutation;
     const auto n = static_cast<Scalar>(function.size());
     const auto r = static_cast<Scalar>(orbit1.size());
@@ -666,11 +666,11 @@ PROFILE Permutation computePermutation(const Orbit &orbit1, const Function &func
     return permutation;
 }
 
-PROFILE Permutation computePermutation(Scalar n, const Orbit &pi, const Orbit &orbit1) {
+PROFILE Permutation computePermutation(Scalar n, const OrbitContainer &pi, const OrbitContainer &orbit1) {
     return computePermutation(orbit1, computeFunction(n, pi, orbit1));
 }
 
-PROFILE SkewMorphism::SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &pi)
+PROFILE SkewMorphism::SkewMorphism(Scalar n, const OrbitContainer &orbit1, const OrbitContainer &pi)
         : SkewMorphism(n, computePermutation(n, pi, orbit1), pi) {
 }
 
@@ -787,7 +787,7 @@ void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Scalar n) {
 
 std::size_t getPreservingSkewCount(const SkewMorphisms &skewMorphisms);//TODO: remove
 
-SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const Orbit &pi)
+SkewMorphism::SkewMorphism(Scalar n, Permutation permutation, const OrbitContainer &pi)
         : _permutation(std::move(permutation))
         , _pi(pi)  // TODO: do not copy but shrink to fit
         , n(n) {
@@ -1107,7 +1107,7 @@ PROFILE void computeAutomorphisms(Number &number) {
 //    clear(number);
 }
 
-std::string to_string(const Orbit &orbit) {
+std::string to_string(const OrbitContainer &orbit) {
     std::string result;
     bool first = true;
     for (const auto e: orbit) {
@@ -1128,7 +1128,7 @@ std::string to_string(const SkewMorphism &skewMorphism) {
     return result;
 }
 
-std::string to_json(const Orbit &orbit) {
+std::string to_json(const OrbitContainer &orbit) {
     std::string result;
     bool first = true;
     result += "[";
@@ -1152,7 +1152,7 @@ std::string to_json(const SkewMorphism &skewMorphism) {
     return result;
 }
 
-PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const Orbits &orbits, const Function& function) {
+PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const OrbitsContainer &orbits, const Function& function) {
     const auto n = static_cast<Scalar>(function.size());
     bool good = true;
     Function c_j(n, 0);
@@ -1215,7 +1215,7 @@ PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const Orbits &or
     return good;
 }
 
-PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorphism &power, Orbit &t) {
+PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorphism &power, OrbitContainer &t) {
     const auto e = t[i];
 
     const auto &orbit = power.orbitOf(e);
@@ -1238,7 +1238,7 @@ PROFILE bool isPermutation(Function &function) {//TODO: spojit s pocitanim funkc
     return true;
 }
 
-PROFILE bool computeOrbit1(const Function &function, Orbit &orbit1) {
+PROFILE bool computeOrbit1(const Function &function, OrbitContainer &orbit1) {
     Scalar c = 1;
     std::size_t index = 0;
     do {
@@ -1249,7 +1249,7 @@ PROFILE bool computeOrbit1(const Function &function, Orbit &orbit1) {
     return c == 1 && index == orbit1.size();
 }
 
-PROFILE bool compareOrbits(const Orbit &sparseOrbit, const Orbit &orbit2) {
+PROFILE bool compareOrbits(const OrbitContainer &sparseOrbit, const OrbitContainer &orbit2) {
     for (std::size_t i = 0; i < sparseOrbit.size(); ++i) {
         if (sparseOrbit[i] == 0) {
             continue;
@@ -1261,7 +1261,7 @@ PROFILE bool compareOrbits(const Orbit &sparseOrbit, const Orbit &orbit2) {
     return true;
 }
 
-PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const Orbit &orbit1) {
+PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const OrbitContainer &orbit1) {
     for (std::size_t a = 0; a < p; ++a) {
         const auto &orbit = power.orbitOf(orbit1[a]);
         auto orbitIterator = orbit.begin(power.r);
@@ -1275,7 +1275,7 @@ PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const O
     return true;
 }
 
-PROFILE bool checkFirstPMod(const SkewMorphism &ro, const Orbit &orbit1) {
+PROFILE bool checkFirstPMod(const SkewMorphism &ro, const OrbitContainer &orbit1) {
     for (std::size_t i = 1; i < ro.d; ++i) {
         if (orbit1[i] % ro.r != ro.pi(i)) {
             return false;
@@ -1358,7 +1358,7 @@ PROFILE std::size_t getProperClassesCount(const SkewMorphisms &skewMorphisms) {
     return result;
 }
 
-PROFILE Function positionOnOrbit(const Orbit &orbit, Scalar n) {
+PROFILE Function positionOnOrbit(const OrbitContainer &orbit, Scalar n) {
     Function result(n, -1);
     for (Scalar x = 0; x < orbit.size(); ++x) {
         result[orbit[x]] = x;
@@ -1366,7 +1366,7 @@ PROFILE Function positionOnOrbit(const Orbit &orbit, Scalar n) {
     return result;
 }
 
-PROFILE void initializeSplitIndex(Orbit &t, std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values, const std::vector<Index> &free_x_index, Scalar exponent, const SkewMorphism &power) {
+PROFILE void initializeSplitIndex(OrbitContainer &t, std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values, const std::vector<Index> &free_x_index, Scalar exponent, const SkewMorphism &power) {
     for (std::size_t i = 0; i <= values.size(); ++i) {
         splitIndex[i] = 0;
     }
@@ -1386,7 +1386,7 @@ PROFILE bool isValidSplitIndex(std::vector<Index> &splitIndex, const std::vector
     return splitIndex[values.size()] == 0;
 }
 
-PROFILE void incrementSplitIndex(Orbit &t, std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values, const std::vector<Index> &free_x_index, Scalar exponent, const SkewMorphism &power) {
+PROFILE void incrementSplitIndex(OrbitContainer &t, std::vector<Index> &splitIndex, const std::vector<std::vector<Scalar>> &values, const std::vector<Index> &free_x_index, Scalar exponent, const SkewMorphism &power) {
     ++splitIndex[0];
     for (std::size_t i = 0; i < values.size(); ++i) {
         if (splitIndex[i] == 0 || splitIndex[i] == values[i].size()) {
@@ -1405,7 +1405,7 @@ PROFILE void incrementSplitIndex(Orbit &t, std::vector<Index> &splitIndex, const
     }
 }
 
-PROFILE void clearOrbit(Orbit &orbit) {
+PROFILE void clearOrbit(OrbitContainer &orbit) {
     for (auto &o: orbit) {
         o = 0;
     }
@@ -1530,9 +1530,9 @@ PROFILE void computeProperNotPreserving(Number &number) {
         }
         const auto r = m;
 
-        Orbit t(r, 0);
+        OrbitContainer t(r, 0);
         t[0] = 1;
-        Orbit &orbit1 = compactSkewMorphism.orbit1;
+        OrbitContainer &orbit1 = compactSkewMorphism.orbit1;
         orbit1.clear();
         orbit1.resize(r, 0);
 
@@ -1909,7 +1909,7 @@ PROFILE CompactSkewMorphism fromString(const std::string &string, Scalar n) {
 
 PROFILE CompactSkewMorphism compactQuotient(const SkewMorphism &skew) {
     const auto &orbit1 = skew.orbit1();
-    Orbit ro_pi;
+    OrbitContainer ro_pi;
     const auto one = 1 % skew.d;
     ro_pi.push_back(one);
     if (orbit1.size() > 1) {
