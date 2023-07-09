@@ -41,6 +41,89 @@ struct CompactSkewMorphism {
     Orbit pi;
 };
 
+class OrbitWrapper {
+public:
+    class Iterator {
+    public:
+        Iterator(const Orbit &orbit, Index index);
+        Iterator(const Orbit &orbit, Index index, std::size_t size);
+
+        const Scalar &operator*() const;
+        Iterator &operator+=(Index increment);
+        Iterator &operator++();
+
+        friend bool operator!=(const Iterator &lhs, const Iterator &rhs);
+
+    private:
+        const Orbit &orbit;
+        std::size_t index;
+        std::size_t size;
+    };
+
+    OrbitWrapper(const Orbits& orbits, const OrbitPlace &place);
+
+    std::size_t size() const;
+    Iterator begin() const noexcept;
+    Iterator begin(std::size_t size) const noexcept;
+    Iterator end() const noexcept;
+
+    bool isSingleElement() const;
+
+private:
+    const Orbits &orbits;
+    const OrbitPlace &place;
+};
+
+OrbitWrapper::Iterator::Iterator(const Orbit &orbit, Index index) : Iterator(orbit, index, orbit.size()) {}
+
+OrbitWrapper::Iterator::Iterator(const Orbit &orbit, Index index, std::size_t size) : orbit(orbit), index(index), size(size) {}
+
+const Scalar &OrbitWrapper::Iterator::operator*() const {
+    return orbit[index];
+}
+
+OrbitWrapper::Iterator &OrbitWrapper::Iterator::operator+=(Index increment) {
+    index += increment;
+    if (index >= size) {
+        index -= size;
+    }
+    return *this;
+}
+
+OrbitWrapper::Iterator &OrbitWrapper::Iterator::operator++() {
+    ++index;
+    if (index == size) {
+        index = 0;
+    }
+    return *this;
+}
+
+bool operator!=(const OrbitWrapper::Iterator &lhs, const OrbitWrapper::Iterator &rhs) {
+    return lhs.index != rhs.index;
+}
+
+OrbitWrapper::OrbitWrapper(const Orbits &orbits, const OrbitPlace &place) : orbits(orbits), place(place) {}
+
+std::size_t OrbitWrapper::size() const {
+    return orbits[place.orbitIndex].size();
+}
+
+OrbitWrapper::Iterator OrbitWrapper::begin() const noexcept {
+    return {orbits[place.orbitIndex], place.indexOnOrbit};
+}
+
+OrbitWrapper::Iterator OrbitWrapper::begin(std::size_t size) const noexcept {
+    return {orbits[place.orbitIndex], place.indexOnOrbit, size};
+}
+
+OrbitWrapper::Iterator OrbitWrapper::end() const noexcept {
+    return begin();
+}
+
+bool OrbitWrapper::isSingleElement() const {
+    return place.orbitIndex == -1;
+}
+
 class SkewMorphism {
 public:
     SkewMorphism(Scalar n, const Orbit &orbit1, const Orbit &pi);
@@ -49,8 +132,7 @@ public:
     const Orbits &orbits() const;
     const Orbit &orbit1() const;
     Scalar orbit1(std::size_t index) const;
-
-    const Permutation &permutation() const;
+    OrbitWrapper orbitOf(Scalar element) const;
 
     const Orbit &pi() const;
     Scalar pi(std::size_t index) const;
@@ -85,8 +167,8 @@ Scalar SkewMorphism::orbit1(std::size_t index) const {
     return orbit1()[index];
 }
 
-const Permutation &SkewMorphism::permutation() const {
-    return _permutation;
+OrbitWrapper SkewMorphism::orbitOf(Scalar element) const {
+    return {_permutation.orbits, _permutation.places[element]};
 }
 
 const Orbit &SkewMorphism::pi() const {
@@ -155,29 +237,23 @@ PROFILE void computePreservingSubgroups(SkewMorphism &skewMorphism) {
     const auto &number = numberCache[skewMorphism.n];
     for (const auto d: number.divisors) {
         const auto &number_d = numberCache[skewMorphism.n / d];
-        const auto &place = skewMorphism.permutation().places[d % skewMorphism.n];
+        const auto &orbit = skewMorphism.orbitOf(d % skewMorphism.n);
         const auto one = 1 % number_d.n;
         CompactSkewMorphism compact;
-        if (place.orbitIndex == -1) {
+        if (orbit.isSingleElement()) {
             compact.orbit1 = {one};
             compact.pi = {0};
         } else {
-            const auto &orbit = skewMorphism.permutation().orbits[place.orbitIndex];
-            auto indexOnOrbit = place.indexOnOrbit + 1;
-            if (indexOnOrbit >= orbit.size()) {
-                indexOnOrbit -= orbit.size();
-            }
-            if (orbit[indexOnOrbit] % d != 0) {
+            auto orbitIterator = ++orbit.begin();
+            const auto orbitEnd = orbit.end();
+            if (*orbitIterator % d != 0) {
                 continue;
             }
             compact.orbit1.reserve(orbit.size());
             compact.orbit1.push_back(one);
-            while (indexOnOrbit != place.indexOnOrbit) {
-                compact.orbit1.push_back(orbit[indexOnOrbit] / d);
-                ++indexOnOrbit;
-                if (indexOnOrbit >= orbit.size()) {
-                    indexOnOrbit -= orbit.size();
-                }
+            while (orbitIterator != orbitEnd) {
+                compact.orbit1.push_back(*orbitIterator / d);
+                ++orbitIterator;
             }
             const auto one_pi = 1 % orbit.size();
             compact.pi.push_back(one_pi);
@@ -1139,17 +1215,14 @@ PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const Orbits &or
 }
 
 PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const SkewMorphism &power, Orbit &t) {
-    const std::size_t orbitSize = power.r;
     const auto e = t[i];
 
-    const auto &place = power.permutation().places[e];
-    const auto &orbit = power.permutation().orbits[place.orbitIndex];
+    const auto &orbit = power.orbitOf(e);
 
-    std::size_t index = place.indexOnOrbit;
+    auto orbitIterator = orbit.begin(power.r);
     for (std::size_t j = p + i; j < t.size(); j += p) {
-        ++index;
-        if (index == orbitSize) index = 0;
-        t[j] = orbit[index];
+        ++orbitIterator;
+        t[j] = *orbitIterator;
     }
 }
 
@@ -1189,13 +1262,11 @@ PROFILE bool compareOrbits(const Orbit &sparseOrbit, const Orbit &orbit2) {
 
 PROFILE bool checkPowerCycles(const Scalar p, const SkewMorphism &power, const Orbit &orbit1) {
     for (std::size_t a = 0; a < p; ++a) {
-        const auto &place = power.permutation().places[orbit1[a]];
-        const auto &orbit = power.permutation().orbits[place.orbitIndex];
-        std::size_t indexOnOrbit = place.indexOnOrbit;
+        const auto &orbit = power.orbitOf(orbit1[a]);
+        auto orbitIterator = orbit.begin(power.r);
         for (std::size_t i = a + p; i < orbit1.size(); i += p) {
-            ++indexOnOrbit;
-            if (indexOnOrbit >= orbit.size()) indexOnOrbit -= orbit.size();
-            if (orbit1[i] != orbit[indexOnOrbit]) {
+            ++orbitIterator;
+            if (orbit1[i] != *orbitIterator) {
                 return false;
             }
         }
@@ -1388,21 +1459,17 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
             const auto coprime_n_inverse = (n + inverse(n, coprime_n)) % n;
             const auto coprime_d = coprime_n % d;
 
-            const auto &coprime_n_place = phi.permutation().places[coprime_n];
-            const auto &coprime_n_orbit = phi.permutation().orbits[coprime_n_place.orbitIndex];
-            std::size_t index = coprime_n_place.indexOnOrbit;
+            const auto &coprime_n_orbit = phi.orbitOf(coprime_n);
+            auto coprime_n_orbit_iterator = coprime_n_orbit.begin();
             for (std::size_t i = 1; i < r; ++i) {
-                index += coprime_r;
-                if (index >= r) index -= r;
-                orbit1[i] = (coprime_n_orbit[index] * coprime_n_inverse) % n;
+                coprime_n_orbit_iterator += coprime_r;
+                orbit1[i] = (*coprime_n_orbit_iterator * coprime_n_inverse) % n;
             }
-            const auto &coprime_r_place = ro.permutation().places[coprime_r];
-            const auto &coprime_r_orbit = ro.permutation().orbits[coprime_r_place.orbitIndex];
-            index = coprime_r_place.indexOnOrbit;
+            const auto &coprime_r_orbit = ro.orbitOf(coprime_r);
+            auto coprime_r_orbit_iterator = coprime_r_orbit.begin();
             for (std::size_t i = 1; i < d; ++i) {
-                index += coprime_d;
-                if (index >= d) index -= d;
-                orbit1_ro[i] = (coprime_r_orbit[index] * coprime_r_inverse) % r;
+                coprime_r_orbit_iterator += coprime_d;
+                orbit1_ro[i] = (*coprime_r_orbit_iterator * coprime_r_inverse) % r;
             }
 
             if (skewIndexMap.find(compactSkewMorphism2) != skewIndexMap.end()) {
