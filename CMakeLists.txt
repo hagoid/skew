@@ -8,6 +8,5 @@ if (PROFILE_FLAG)
     add_compile_definitions(PROFILE_FLAG)
 endif(PROFILE_FLAG)
 
-add_executable(skew skew.cpp)
 add_executable(count_skew count_skew.cpp)
 target_include_directories(count_skew PRIVATE include)
