@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 #include <numeric>
+#include <CLI11.hpp>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -2365,17 +2366,19 @@ void printHtml(std::ofstream &output, const Number &number) {
 }
 
 int main(int argc, char *argv[]) {
+    CLI::App app{"Compute list of skew morphisms"};
+
     Scalar N = 100;
-    if (argc > 1) {
-        N = std::stoi(argv[1]);
-    }
+    app.add_option("N", N, "Compute up to");
     Scalar A = 1;
-    if (argc > 2) {
-        A = std::stoi(argv[2]);
-    }
+    app.add_option("A", A, "Compute from");
     bool recompute = false;
-    if (argc > 3) {
-        recompute = argv[3] == std::string("--recompute");
+    app.add_flag("--recompute", recompute, "Recompute instead of loading");
+
+    try {
+        app.parse(argc, argv);
+    } catch (const CLI::ParseError &e) {
+        return app.exit(e);
     }
 
     //TODO: compute coprimes ale len do N
