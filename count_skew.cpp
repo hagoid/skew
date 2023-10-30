@@ -304,9 +304,8 @@ public:
 private:
     Permutation _permutation;
     const SkewMorphism *quotient;
+    Scalar _ordAut;
 };
-
-PROFILE WeakClassRepresentant::WeakClassRepresentant(Permutation permutation, const SkewMorphism *quotient) : _permutation(std::move(permutation)), quotient(quotient){}
 
 PROFILE const OrbitsContainer &WeakClassRepresentant::orbits() const {
     return _permutation.orbits;
@@ -358,6 +357,8 @@ public:
     Scalar s() const;
     Scalar c() const;
 
+    Scalar phi_1() const;
+
     bool inverseOrbit() const;
 
     std::unordered_map<Scalar, std::vector<Index>> roots;
@@ -371,7 +372,16 @@ private:
     Scalar aInv;
     Scalar e;
     Scalar eInv;
+    Scalar _phi_1;
 };
+
+PROFILE WeakClassRepresentant::WeakClassRepresentant(Permutation permutation, const SkewMorphism *quotient) : _permutation(std::move(permutation)), quotient(quotient){
+    if (quotient == nullptr || quotient->r() == 1) {
+        _ordAut = r();
+    } else {
+        _ordAut = quotient->ordAut();
+    }
+}
 
 PROFILE Scalar WeakClassRepresentant::d() const {
     if (quotient == nullptr) {
@@ -381,10 +391,7 @@ PROFILE Scalar WeakClassRepresentant::d() const {
 }
 
 Scalar WeakClassRepresentant::ordAut() const {
-    if (quotient == nullptr || quotient->r() == 1) {
-        return r();
-    }
-    return quotient->ordAut();
+    return _ordAut;
 }
 
 PROFILE OrbitWrapper WeakClassRepresentant::quotientOrbitOf(Scalar element) const {
@@ -428,7 +435,7 @@ PROFILE Scalar SkewMorphism::d() const {
     return representant.d();
 }
 
-Scalar SkewMorphism::ordAut() const {
+PROFILE Scalar SkewMorphism::ordAut() const {
     return representant.ordAut();
 }
 
@@ -1075,10 +1082,16 @@ PROFILE SkewMorphism::SkewMorphism(const WeakClassRepresentant &representant, Sc
     aInv = (n() + inverse(n(), a)) % n();
     eInv = (r() + inverse(r(), e)) % r();
     powerOfInverseOrbit = inverseOrbit();
+
+    _phi_1 = orbit1(1);
 }
 
 PROFILE Scalar SkewMorphism::c() const {
     return representant.c();
+}
+
+PROFILE Scalar SkewMorphism::phi_1() const {
+    return _phi_1;
 }
 
 PROFILE Scalar WeakClassRepresentant::c() const {
@@ -1854,7 +1867,8 @@ PROFILE void computeOdd(Number &number, Scalar c) {
                 }
 
                 for (Scalar a = ro.pi(1); a < n; a += d) {
-                    if (power.orbitOf(a).size() != ord_power) {
+                    const auto &orbit_a = power.orbitOf(a);
+                    if (orbit_a.isSingleElement() || orbit_a.size() != ord_power) {
                         continue;
                     }
                     t[1] = a;
@@ -1901,6 +1915,45 @@ PROFILE void computeOdd(Number &number, Scalar c) {
 //    printf("%d %ld\n", n, foundSkews.size());
 }
 
+PROFILE std::vector<std::pair<Scalar, OrbitContainer>>
+bbb(const Scalar n, const Scalar e, const Scalar n_div_e, const WeakClassRepresentant &psi) {
+    std::vector<std::pair<Scalar, OrbitContainer>> ts;
+    const auto psi_r = psi.r();
+
+    Function psiFunction = computeFunction(n_div_e, OrbitContainer{psi.quotientOrbitOf(1)}, psi.orbit1());
+    Function psiPower(n_div_e);
+    std::iota(std::begin(psiPower), std::end(psiPower), 0);
+
+
+    for (Scalar ro_1_mod_psi_r = 0; ro_1_mod_psi_r < psi_r; ++ro_1_mod_psi_r) {
+        for (Scalar k = 1; k < n_div_e; ++k) {
+            auto b = k;
+            OrbitContainer t;
+            t.reserve(n);
+            t.push_back(1);
+//                    t.resize(1);
+            for (std::size_t i = 1; i < n; ++i) {
+                t.push_back(b * e + 1);
+                b = (psiPower[b] + k);
+                if (b >= n_div_e) b -= n_div_e;
+                if (b == 0) {
+                    break;
+                }
+            }
+            const Scalar r = t.size();
+            if (r == n) {
+                continue;
+            }
+            ts.emplace_back(std::make_pair(ro_1_mod_psi_r, std::move(t)));
+        }
+        for (std::size_t i = 0; i < n_div_e; ++i) {
+            psiPower[i] = psiFunction[psiPower[i]];
+        }
+    }
+    std::sort(ts.begin(), ts.end(),[](const auto &lhs, const auto &rhs) { return lhs.second.size() < rhs.second.size(); });
+    return ts;
+}
+
 PROFILE void computeEven(Number &number, Scalar c) {
     const auto n = number.n;
     const auto &number_nlambda = numberCache[n * number.lambda];
@@ -1929,34 +1982,10 @@ PROFILE void computeEven(Number &number, Scalar c) {
         for (std::size_t psi_class_index = 0; psi_class_index < getClassesCount(number_n_div_e.skewMorphisms); ++psi_class_index) {
             const auto &psiClass = getClass(number_n_div_e.skewMorphisms, psi_class_index);
             const auto &psi = *psiClass.weakClassRepresentant;
+            const auto psi_r = psi.r();
 
-            std::vector<std::pair<Scalar, OrbitContainer>> ts;
+            std::vector<std::pair<Scalar, OrbitContainer>> ts = bbb(n, e, n_div_e, psi);
 
-            for (Scalar k = 1; k < n_div_e; ++k) {
-                for (Scalar ro_1_mod_psi_r = 0; ro_1_mod_psi_r < psi.r(); ++ro_1_mod_psi_r) {
-                    auto b = k;
-                    OrbitContainer t;
-                    t.reserve(n);
-                    t.push_back(1);
-//                    t.resize(1);
-                    for (std::size_t i = 1; i < n; ++i) {
-                        t.push_back(b * e + 1);
-                        auto orbitB = OrbitWrapper(psi.orbitOf(b), n_div_e);
-                        orbitB ^= ro_1_mod_psi_r;
-                        b = (*(++orbitB.begin()) + k);
-                        if (b >= n_div_e) b -= n_div_e;
-                        if (b == 0) {
-                            break;
-                        }
-                    }
-                    const Scalar r = t.size();
-                    if (r == n) {
-                        continue;
-                    }
-                    ts.emplace_back(std::make_pair(ro_1_mod_psi_r, std::move(t)));
-                }
-            }
-            std::sort(ts.begin(), ts.end(),[](const auto &lhs, const auto &rhs) { return lhs.second.size() < rhs.second.size(); });
             for (const auto &pair: ts) {
                 const auto ro_1_mod_psi_r = pair.first;
                 const auto &t = pair.second;
@@ -1988,7 +2017,7 @@ PROFILE void computeEven(Number &number, Scalar c) {
                             continue;
                         }
 
-                        if (ro_1_mod_psi_r != ro.orbit1(1) % psi.r()) {
+                        if (ro_1_mod_psi_r != ro.phi_1() % psi_r) {
                             continue;
                         }
 
