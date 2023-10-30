@@ -1961,72 +1961,74 @@ PROFILE void computeEven(Number &number, Scalar c) {
                 const auto ro_1_mod_psi_r = pair.first;
                 const auto &t = pair.second;
                 const Scalar r = t.size();
-                const auto &number_r = numberCache[r];
+                auto &number_r = numberCache[r];
                 const auto psi_1 = t[1];
 
-                for (std::size_t ro_index = 0; ro_index < getProperSkewCount(number_r.skewMorphisms); ++ro_index) {
-                    const auto &ro = getProperSkewByIndex(number_r.skewMorphisms, ro_index);
+                if (number_r.skewMorphisms.classes.size() < c) {
+                    continue;
+                }
 
-                    if (ro.c() + 1 != c) {
-                        continue;
-                    }
+                for (const auto &roClass: number_r.skewMorphisms.classes[c - 1]) {
+                    for (auto ro_index = roClass.begin; ro_index < roClass.end; ++ro_index) {
+                        const auto &ro = getSkewByIndex(number_r.skewMorphisms, ro_index);
 
-                    if (ro.ordAut() != e) {
-                        continue;
-                    }
+                        if (ro.ordAut() != e) {
+                            continue;
+                        }
 
-                    const auto d = ro.r();
+                        const auto d = ro.r();
 
-                    if (n % (d * maxPrime) != 0) {
-                        continue;
-                    }
+                        if (n % (d * maxPrime) != 0) {
+                            continue;
+                        }
 
-                    const auto n_div_d = n / d;
+                        const auto n_div_d = n / d;
 
-                    if (isCoprime(numberCache[n_div_d], number_r)) {
-                        continue;
-                    }
+                        if (isCoprime(numberCache[n_div_d], number_r)) {
+                            continue;
+                        }
 
-                    if (ro_1_mod_psi_r != ro.orbit1(1) % psi.r()) {
-                        continue;
-                    }
+                        if (ro_1_mod_psi_r != ro.orbit1(1) % psi.r()) {
+                            continue;
+                        }
 
-                    if (!checkFirstPMod(ro, t)) {
-                        continue;
-                    }
-                    const auto &pi = OrbitContainer{ro.orbit1()};
-                    if (!computeFunction(n, pi, t, function)) {
-                        continue;
-                    }
-                    if (!isPermutation(function)) {
-                        continue;
-                    }
+                        if (!checkFirstPMod(ro, t)) {
+                            continue;
+                        }
+                        const auto &pi = OrbitContainer{ro.orbit1()};
+                        if (!computeFunction(n, pi, t, function)) {
+                            continue;
+                        }
+                        if (!isPermutation(function)) {
+                            continue;
+                        }
 
-                    orbit1.resize(r);
-                    if (!computeOrbit1(function, orbit1)) {
-                        continue;
-                    }
+                        orbit1.resize(r);
+                        if (!computeOrbit1(function, orbit1)) {
+                            continue;
+                        }
 
-                    //TODO: ktore checky treba robit?
-                    if (!compareOrbits(t, orbit1)) {
-                        continue;
-                    }
+                        //TODO: ktore checky treba robit?
+                        if (!compareOrbits(t, orbit1)) {
+                            continue;
+                        }
 //                        if (!checkPowerCycles(exponent, power, orbit1)) {
 //                            continue;
 //                        }
 
-                    compactSkewMorphism.pi = pi;  // TODO: do not copy
-                    if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
-                        continue;
+                        compactSkewMorphism.pi = pi;  // TODO: do not copy
+                        if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
+                            continue;
+                        }
+
+                        auto permutation = computePermutation(orbit1, function);
+
+                        if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
+                            continue;
+                        }
+
+                        addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
                     }
-
-                    auto permutation = computePermutation(orbit1, function);
-
-                    if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
-                        continue;
-                    }
-
-                    addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
                 }
             }
         }
