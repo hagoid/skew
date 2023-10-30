@@ -299,6 +299,7 @@ public:
     Scalar n() const;
     Scalar r() const;
     Scalar d() const;
+    Scalar ordAut() const;
     Scalar c() const;
 private:
     Permutation _permutation;
@@ -351,6 +352,7 @@ public:
 
     Scalar n() const;
     Scalar d() const;
+    Scalar ordAut() const;
     Scalar r() const;
     Scalar h() const;
     Scalar s() const;
@@ -376,6 +378,13 @@ Scalar WeakClassRepresentant::d() const {
         return 1;
     }
     return quotient->orbit1().size();
+}
+
+Scalar WeakClassRepresentant::ordAut() const {
+    if (quotient == nullptr || quotient->r() == 1) {
+        return r();
+    }
+    return quotient->ordAut();
 }
 
 OrbitWrapper WeakClassRepresentant::quotientOrbitOf(Scalar element) const {
@@ -417,6 +426,10 @@ Scalar SkewMorphism::n() const {
 
 Scalar SkewMorphism::d() const {
     return representant.d();
+}
+
+Scalar SkewMorphism::ordAut() const {
+    return representant.ordAut();
 }
 
 Scalar SkewMorphism::r() const {
@@ -1734,6 +1747,9 @@ PROFILE bool quotientEquals(const WeakClassRepresentant &skew, const SkewMorphis
     return true;
 }
 
+void computeOdd(Number &number, Scalar c);
+void computeEven(Number &number, Scalar c);
+
 //TODO: zoradit podla radu
 //TODO: kanonicke poradie autov, aj cosetov
 
@@ -1742,12 +1758,32 @@ PROFILE void computeProperNotPreserving(Number &number) {
     const auto n = number.n;
     const auto &number_nlambda = numberCache[n * number.lambda];
 
+    Scalar maxC = 3;
+    for (const auto m: number_nlambda.divisors) {
+        if (m >= n) {
+            continue;
+        }
+        const auto &number_m = numberCache[m];
+        const Scalar m_maxC = number_m.skewMorphisms.classes.size();
+        maxC = std::max(maxC, m_maxC);
+    }
+    for (Scalar c = 3; c <= maxC; ++c) {
+        if (c % 2 == 1) {
+            computeOdd(number, c);
+        } else {
+            computeEven(number, c);
+        }
+    }
+}
+
+PROFILE void computeOdd(Number &number, Scalar c) {
+    const auto n = number.n;
+    const auto &number_nlambda = numberCache[n * number.lambda];
+
     const auto maxPrime = getMaxPrime(number);
     auto n_div_maxPrime = n / maxPrime;
 
     Function function(n, 0);
-    std::vector<std::vector<OrbitPlace>> moduloOrbits(n);
-    std::vector<Index> splitIndex(n + 1, 0);
 
     CompactSkewMorphism compactSkewMorphism;
     const auto &skewIndexMap = number.skewMorphisms.skewIndexMap;
@@ -1771,6 +1807,10 @@ PROFILE void computeProperNotPreserving(Number &number) {
         for (std::size_t ro_index = 0; ro_index < getProperSkewCount(number_m.skewMorphisms); ++ro_index) {
             const auto &ro = getProperSkewByIndex(number_m.skewMorphisms, ro_index);
 
+            if (ro.c() + 1 != c) {
+                continue;
+            }
+
             const auto d = ro.r();
 
             if (n % (d * maxPrime) != 0) {
@@ -1789,19 +1829,10 @@ PROFILE void computeProperNotPreserving(Number &number) {
 
             compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
 
-            const auto exponent = numberCache[p].primes[0];
-            const auto p_exponent = p / exponent;
+            const auto exponent = ro.ordAut();
             const auto ord_power = m / exponent;
 
-            std::vector<Index> free_x_index;
-            std::set<Index> set;
-            for (const auto index: orbit1_ro) {
-                set.insert(index % exponent);  // TODO: toto je orbita automorfizmu mod exponent
-            }
-            std::copy(set.begin(), set.end(), std::back_inserter(free_x_index));
-
             clearOrbit(t);
-            const auto positionOnRoPi = positionOnOrbit(ro.pi(), d);
 
             const auto &powerQuotient = getSkewByIndex(numberCache[ord_power].skewMorphisms, ro.preservingSubgroups.find(exponent)->second);
 
@@ -1812,9 +1843,9 @@ PROFILE void computeProperNotPreserving(Number &number) {
                 if (power.r() != ord_power) {
                     continue;
                 }
-                if (power.orbit1(p_exponent) % d != 1) {
-                    continue;
-                }
+//                if (power.orbit1(p_exponent) % d != 1) {
+//                    continue;
+//                }
                 if (power.max_orbits() < exponent) {
                     continue;
                 }
@@ -1823,60 +1854,12 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     continue;
                 }
 
-                const auto &power_orbits = power.orbits();
-
-                for (std::size_t i = 0; i < exponent; ++i) {
-                    moduloOrbits[i].clear();
-                }
-                for (Index i = 0; i < power.max_orbits(); ++i) {
-                    const auto &orbit = power_orbits[i];
-                    const auto modulo = orbit[0] % d;
-                    auto index = positionOnRoPi[modulo];
-                    if (index == -1) {
+                for (Scalar a = ro.pi(1); a < n; a += d) {
+                    if (power.orbitOf(a).size() != ord_power) {
                         continue;
                     }
-                    bool all = true;
-                    for (std::size_t j = 1; j < orbit.size(); ++j) {
-                        index += exponent;
-                        if (index >= p) index -= p;
-                        if (orbit[j] % d != ro.pi(index)) {
-                            all = false;
-                            break;
-                        }
-                    }
-                    if (!all) {
-                        continue;
-                    }
-                    index = positionOnRoPi[modulo];
-                    const auto smallestIndex = index % exponent;
-                    const auto offset = index < exponent ? 0 : p_exponent - index / exponent;
-                    moduloOrbits[smallestIndex].push_back(OrbitPlace{.orbitIndex = i, .indexOnOrbit = offset});
-                }
-                bool allModulos = true;
-                for (Index i = 0; i < exponent; ++i) {
-                    if (moduloOrbits[i].empty()) {
-                        allModulos = false;
-                        break;
-                    }
-                }
-                if (!allModulos) {
-                    continue;
-                }
-
-                std::vector<std::vector<Scalar>> free_x_values;
-                free_x_values.reserve(free_x_index.size());
-                for (const auto index: free_x_index) {
-                    free_x_values.emplace_back();
-//                        free_x_values.back().reserve(n_div_d);
-                    for (const auto moduloOrbitPlace: moduloOrbits[index]) {
-                        const auto &orbit = power_orbits[moduloOrbitPlace.orbitIndex];
-                        for (std::size_t i = moduloOrbitPlace.indexOnOrbit; i < orbit.size(); i += p_exponent) {
-                            free_x_values.back().push_back(orbit[i]);
-                        }
-                    }
-                }
-
-                for (initializeSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power); isValidSplitIndex(splitIndex, free_x_values); incrementSplitIndex(t, splitIndex, free_x_values, free_x_index, exponent, power)) {
+                    t[1] = a;
+                    periodicallyFillOrbit(exponent, 1, power, t);
                     const auto &pi = orbit1_ro;
                     if (!computeFunction(n, pi, t, function)) {
                         continue;
@@ -1899,6 +1882,142 @@ PROFILE void computeProperNotPreserving(Number &number) {
                     if (!checkPowerCycles(exponent, power, orbit1)) {
                         continue;
                     }
+
+                    if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
+                        continue;
+                    }
+
+                    auto permutation = computePermutation(orbit1, function);
+
+                    if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
+                        continue;
+                    }
+
+                    addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
+                }
+            }
+        }
+    }
+    //printf("\r");
+//    printf("%d %ld\n", n, foundSkews.size());
+}
+
+PROFILE void computeEven(Number &number, Scalar c) {
+    const auto n = number.n;
+    const auto &number_nlambda = numberCache[n * number.lambda];
+
+    const auto maxPrime = getMaxPrime(number);
+    auto n_div_maxPrime = n / maxPrime;
+
+    Function function(n, 0);
+
+    CompactSkewMorphism compactSkewMorphism;
+    const auto &skewIndexMap = number.skewMorphisms.skewIndexMap;
+
+    for (const auto m: number_nlambda.divisors) {
+        if (m >= n) {
+            continue;
+        }
+        const auto &number_m = numberCache[m];
+        if (isCoprime(number, number_m)) {
+            continue;
+        }
+        const auto r = m;
+
+        OrbitContainer t(r, 0);
+        t[0] = 1;
+        OrbitContainer &orbit1 = compactSkewMorphism.orbit1;
+        orbit1.clear();
+        orbit1.resize(r, 0);
+
+        for (std::size_t ro_index = 0; ro_index < getProperSkewCount(number_m.skewMorphisms); ++ro_index) {
+            const auto &ro = getProperSkewByIndex(number_m.skewMorphisms, ro_index);
+
+            if (ro.c() + 1 != c) {
+                continue;
+            }
+
+            const auto d = ro.r();
+
+            if (n % (d * maxPrime) != 0) {
+                continue;
+            }
+
+            const auto n_div_d = n / d;
+
+            if (isCoprime(numberCache[n_div_d], number_m)) {
+                continue;
+            }
+
+            const auto p = ro.d();
+
+            const auto &orbit1_ro = OrbitContainer{ro.orbit1()};
+
+            compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
+
+            const auto exponent = ro.ordAut();
+            const auto ord_power = n / exponent;
+
+            clearOrbit(t);
+
+//                const auto &powerQuotient = powerOf(ro, *quotient(ro).preservingSubgroups.find(exponent), numberCache[r].skewMorphisms);
+
+            for (std::size_t power_class_index = 0; power_class_index < getClassesCount(numberCache[ord_power].skewMorphisms); ++power_class_index) {
+                const auto &powerClass = getClass(numberCache[ord_power].skewMorphisms, power_class_index);
+                const auto &power = *powerClass.weakClassRepresentant;
+
+//                    if (power.r() != ord_power) {
+//                        continue;
+//                    }
+////                if (power.orbit1(p_exponent) % d != 1) {
+////                    continue;
+////                }
+//                    if (power.max_orbits() < exponent) {
+//                        continue;
+//                    }
+
+//                    if (!quotientEquals(power, powerQuotient)) {
+//                        continue;
+//                    }
+
+                for (Scalar k = 1; k < ord_power; ++k) {
+                    const auto a = k * exponent + 1;
+                    if (a % d != ro.pi(1)) {
+                        continue;
+                    }
+                    t[0] = 1;
+                    t[1] = a;
+                    const auto &pi = orbit1_ro;
+                    auto b = k;
+                    for (std::size_t i = 2; i < t.size(); ++i) {
+                        auto orbitB = OrbitWrapper(power.orbitOf(b), ord_power);
+                        orbitB ^= pi[1];
+                        b = (*(++orbitB.begin()) + k);
+                        if (b >= ord_power) b -= ord_power;
+                        t[i] = b * exponent + 1;
+                    }
+                    if (!checkFirstPMod(ro, t)) {
+                        continue;
+                    }
+                    if (!computeFunction(n, pi, t, function)) {
+                        continue;
+                    }
+                    if (!isPermutation(function)) {
+                        continue;
+                    }
+
+                    if (!computeOrbit1(function, orbit1)) {
+                        continue;
+                    }
+
+
+                    //TODO: ktore checky treba robit?
+                    if (!compareOrbits(t, orbit1)) {
+                        continue;
+                    }
+//                        if (!checkPowerCycles(exponent, power, orbit1)) {
+//                            continue;
+//                        }
 
                     if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
                         continue;
