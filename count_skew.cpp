@@ -2053,6 +2053,7 @@ PROFILE void computeEven(Number &number, Scalar c) {
                         auto permutation = computePermutation(orbit1, function);
 
                         if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
+                            throw "";
                             continue;
                         }
 
@@ -2565,6 +2566,16 @@ int main(int argc, char *argv[]) {
         if (getSkewCount(number.skewMorphisms) != number.phi) {
             print(number);
         }
+
+        for (const auto &skew: number.skewMorphisms.skews) {
+            if (skew->c() % 2 == 1) {
+                const auto &q = quotient(*skew);
+                if (skew->r() % q.r() != 0) {
+                    throw "";
+                }
+            }
+        }
+
         std::ofstream file;
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
         for (std::size_t i = 0; i < 2; ++i) {
