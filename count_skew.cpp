@@ -74,6 +74,7 @@ public:
     Iterator end() const noexcept;
 
     bool isSingleElement() const;
+    Scalar getSingleElement() const;
 
 private:
     const OrbitsContainer &orbits;
@@ -120,6 +121,10 @@ OrbitWrapper::Iterator OrbitWrapper::end() const noexcept {
 
 bool OrbitWrapper::isSingleElement() const {
     return place.orbitIndex == -1;
+}
+
+Scalar OrbitWrapper::getSingleElement() const {
+    return place.indexOnOrbit;
 }
 }
 
@@ -301,6 +306,8 @@ public:
     Scalar d() const;
     Scalar ordAut() const;
     Scalar c() const;
+
+    std::uint64_t quotientClassHash() const;
 private:
     Permutation _permutation;
     const SkewMorphism *quotient;
@@ -1101,6 +1108,13 @@ PROFILE Scalar WeakClassRepresentant::c() const {
     return quotient->c() + 1;
 }
 
+PROFILE std::uint64_t WeakClassRepresentant::quotientClassHash() const {
+    if (quotient == nullptr) {
+        return hash(SkewMorphism{*this, 1, 1});
+    }
+    return quotient->hash;
+}
+
 PROFILE Scalar WeakClassRepresentant::max_orbits() const {
     if (isIdentity(*this)) {
         return n();
@@ -1508,6 +1522,10 @@ PROFILE void periodicallyFillOrbit(std::size_t p, std::size_t i, const WeakClass
     auto orbitIterator = orbit.begin();
     for (std::size_t j = p + i; j < t.size(); j += p) {
         ++orbitIterator;
+        if (orbit.isSingleElement()) {
+            t[j] = orbit.getSingleElement();
+            continue;
+        }
         t[j] = *orbitIterator;
     }
 }
@@ -1825,15 +1843,15 @@ PROFILE void computeOdd(Number &number, Scalar c) {
 
             const auto d = ro.r();
 
-            if (n % (d * maxPrime) != 0) {
-                continue;
-            }
+//            if (n % (d * maxPrime) != 0) {
+//                continue;
+//            }
 
-            const auto n_div_d = n / d;
+//            const auto n_div_d = n / d;
 
-            if (isCoprime(numberCache[n_div_d], number_m)) {
-                continue;
-            }
+//            if (isCoprime(numberCache[n_div_d], number_m)) {
+//                continue;
+//            }
 
             const auto p = ro.d();
 
@@ -1858,9 +1876,9 @@ PROFILE void computeOdd(Number &number, Scalar c) {
 //                if (power.orbit1(p_exponent) % d != 1) {
 //                    continue;
 //                }
-                if (power.max_orbits() < exponent) {
-                    continue;
-                }
+//                if (power.max_orbits() < exponent) {
+//                    continue;
+//                }
 
                 if (!quotientEquals(power, powerQuotient)) {
                     continue;
@@ -1868,31 +1886,74 @@ PROFILE void computeOdd(Number &number, Scalar c) {
 
                 for (Scalar a = ro.pi(1); a < n; a += d) {
                     const auto &orbit_a = power.orbitOf(a);
-                    if (orbit_a.isSingleElement() || orbit_a.size() != ord_power) {
-                        continue;
-                    }
+//                    if (orbit_a.isSingleElement() || orbit_a.size() != ord_power) {
+//                        continue;
+//                    }
                     t[1] = a;
                     periodicallyFillOrbit(exponent, 1, power, t);
                     const auto &pi = orbit1_ro;
                     if (!computeFunction(n, pi, t, function)) {
+                        throw "";
                         continue;
                     }
+                    if (!orbit_a.isSingleElement() && (orbit_a.size() != ord_power && isCoprime(numberCache[a], numberCache[*(++orbit_a.begin())]))) {
+                        throw "";
+                    }
+
+                    bool ok = true;
+                    for (Scalar i = 0; i < n; ++i) {
+                        const auto& orbitI = power.orbitOf(i);
+                        Scalar k = i;
+                        for (std::size_t j = 0; j < exponent; ++j) {
+                            k = function[k];
+                        }
+
+                        if (orbitI.isSingleElement()) {
+                            if (i != k) {
+                                ok = false;
+                                break;
+                            }
+                        } else {
+                            if (*(++orbitI.begin()) != k) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!ok) {
+                        continue;
+                    }
+                    if (n % d != 0) {
+                        throw;
+                    }
+
+                    if (orbit_a.isSingleElement() || orbit_a.size() != ord_power) {
+                        throw;
+                        continue;
+                    }
+
+
                     if (!isPermutation(function)) {
+                        throw "";
                         continue;
                     }
 
                     if (!computeOrbit1(function, orbit1)) {
+                        throw "";
                         continue;
                     }
 
                     if (!checkFirstPMod(ro, orbit1)) {
+                        throw "";
                         continue;
                     }
                     //TODO: ktore checky treba robit?
                     if (!compareOrbits(t, orbit1)) {
+                        throw "";
                         continue;
                     }
                     if (!checkPowerCycles(exponent, power, orbit1)) {
+                        throw "";
                         continue;
                     }
 
@@ -1903,6 +1964,7 @@ PROFILE void computeOdd(Number &number, Scalar c) {
                     auto permutation = computePermutation(orbit1, function);
 
                     if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
+                        throw "";
                         continue;
                     }
 
@@ -1991,7 +2053,7 @@ PROFILE void computeEven(Number &number, Scalar c) {
                 const auto &t = pair.second;
                 const Scalar r = t.size();
                 auto &number_r = numberCache[r];
-                const auto psi_1 = t[1];
+                const auto phi_1 = t[1];
 
                 if (number_r.skewMorphisms.classes.size() < c) {
                     continue;
@@ -2053,7 +2115,7 @@ PROFILE void computeEven(Number &number, Scalar c) {
                         auto permutation = computePermutation(orbit1, function);
 
                         if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
-                            throw "";
+//                            throw "";
                             continue;
                         }
 
@@ -2567,14 +2629,14 @@ int main(int argc, char *argv[]) {
             print(number);
         }
 
-        for (const auto &skew: number.skewMorphisms.skews) {
-            if (skew->c() % 2 == 1) {
-                const auto &q = quotient(*skew);
-                if (skew->r() % q.r() != 0) {
-                    throw "";
-                }
-            }
-        }
+//        for (const auto &skew: number.skewMorphisms.skews) {
+//            if (skew->c() % 2 == 1) {
+//                const auto &q = quotient(*skew);
+//                if (skew->r() % q.r() != 0) {
+//                    throw "";
+//                }
+//            }
+//        }
 
         std::ofstream file;
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
@@ -2651,6 +2713,49 @@ int main(int argc, char *argv[]) {
                "  </body>\n"
                "</html>\n"
                 ;
+    }
+
+    std::unordered_map<std::size_t, std::vector<const WeakClassRepresentant *>> quotientOfMap;
+
+    for (auto n = 1; n <= N; ++n) {
+        const auto& number = numberCache[n];
+        for (const auto &c: number.skewMorphisms.classes) {
+            for (const auto &cc: c) {
+                const auto& skew = *cc.weakClassRepresentant;
+                auto iterator = quotientOfMap.find(skew.quotientClassHash());
+                if (iterator == quotientOfMap.end()) {
+                    quotientOfMap[skew.quotientClassHash()] = {&skew};
+                } else {
+                    iterator->second.push_back(&skew);
+                }
+            }
+        }
+    }
+
+    for (const auto& pair: quotientOfMap) {
+        std::ofstream output("../html/quotient-of/" + std::to_string(pair.first) + ".json");
+        output << "[";
+        bool first = true;
+        for (const auto* skew: pair.second) {
+            if (first) {
+                first = false;
+            } else {
+                output << ",";
+            }
+            output << "\n";
+            output << "[";
+            bool first = true;
+            for (const auto p: skew->quotientOrbitOf(1)) {
+                if (first) {
+                    first = false;
+                } else {
+                    output << ", ";
+                }
+                output << skew->orbit1(p);
+            }
+            output << "]";
+        }
+        output << "]\n";
     }
 
 
