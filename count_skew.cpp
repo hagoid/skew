@@ -974,6 +974,34 @@ PROFILE SkewMorphism &powerOf(const SkewMorphism &skewMorphism, const std::pair<
     return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
 }
 
+PROFILE SkewMorphism &mod(const SkewMorphism &skewMorphism, Scalar n) {
+    auto &skewMorphisms = numberCache[n].skewMorphisms;
+    if (n == 1) {
+        return getSkewByIndex(skewMorphisms, 0);
+    }
+    const auto orbit1 = OrbitContainer{skewMorphism.orbit1()};
+    const auto pi = OrbitContainer{skewMorphism.pi()};
+    CompactSkewMorphism compactOther;
+    compactOther.orbit1.push_back(1);
+    if (orbit1.size() > 1) {
+        for (std::size_t i = 1; i < orbit1.size() && orbit1[i] % n != 1; ++i) {
+            compactOther.orbit1.push_back(orbit1[i] % n);
+        }
+    }
+    const Scalar r = compactOther.orbit1.size();
+    if (r > 1) {
+        compactOther.pi.push_back(1);
+        for (std::size_t i = 1; i < pi.size() && pi[i] % r != 1; ++i) {
+            compactOther.pi.push_back(pi[i] % r);
+        }
+    } else {
+        compactOther.pi.push_back(0);
+    }
+    compactOther.orbit1.shrink_to_fit();
+    compactOther.pi.shrink_to_fit();
+    return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
+}
+
 PROFILE std::uint64_t cyrb53(const std::vector<Scalar> &vector, std::uint32_t seed = 0) {
     std::uint32_t h1 = 0xdeadbeef ^ seed;
     std::uint32_t h2 = 0x41c6ce57 ^ seed;
@@ -1280,6 +1308,10 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
                                     const auto gcd_nh_b_b = gcd(number_n_b, number_gcd_nh_b);
                                     const auto &number_gcd_nh_b_b = numberCache[gcd_nh_b_b];
                                     const auto increment = numberCache[d].phi * number_rH.phi * gcd_nh_b_b * number_gcd_nh_b.phi / number_gcd_nh_b_b.phi;//TODO: can be precompted;
+
+//                                    if (increment != numberCache[d].phi * numberCache[r].phi) {
+//                                        throw "";
+//                                    }
 
                                     auto increment2 = 0;
                                     const auto n = d * number_n_div_d.n;
@@ -1941,7 +1973,7 @@ bbb(const Scalar n, const Scalar e, const Scalar n_div_e, const WeakClassReprese
                 }
             }
             const Scalar r = t.size();
-            if (r == n) {
+            if (r == n) {  // TODO: || r % psi.r() != 0
                 continue;
             }
             ts.emplace_back(std::make_pair(ro_1_mod_psi_r, std::move(t)));
@@ -1986,12 +2018,13 @@ PROFILE void computeEven(Number &number, Scalar c) {
 
             std::vector<std::pair<Scalar, OrbitContainer>> ts = bbb(n, e, n_div_e, psi);
 
+            const auto psiFunction = computeFunction(psi.n(), OrbitContainer{psi.quotientOrbitOf(1)}, psi.orbit1());
+
             for (const auto &pair: ts) {
                 const auto ro_1_mod_psi_r = pair.first;
                 const auto &t = pair.second;
                 const Scalar r = t.size();
                 auto &number_r = numberCache[r];
-                const auto psi_1 = t[1];
 
                 if (number_r.skewMorphisms.classes.size() < c) {
                     continue;
@@ -2001,21 +2034,30 @@ PROFILE void computeEven(Number &number, Scalar c) {
                     for (auto ro_index = roClass.begin; ro_index < roClass.end; ++ro_index) {
                         const auto &ro = getSkewByIndex(number_r.skewMorphisms, ro_index);
 
+                        if (ro.preservingSubgroups.find(psi_r) == ro.preservingSubgroups.end()) {
+                            continue;
+                        }
                         if (ro.ordAut() != e) {
+                            continue;
+                        }
+                        const auto &ro_e = powerOf(ro, *quotient(ro).preservingSubgroups.find(e), number_r.skewMorphisms);
+                        const auto &ro_e_mod_psi_r = mod(ro_e, psi_r);
+
+                        if (!quotientEquals(psi, ro_e_mod_psi_r)) {
                             continue;
                         }
 
                         const auto d = ro.r();
 
-                        if (n % (d * maxPrime) != 0) {
-                            continue;
-                        }
-
-                        const auto n_div_d = n / d;
-
-                        if (isCoprime(numberCache[n_div_d], number_r)) {
-                            continue;
-                        }
+//                        if (n % (d * maxPrime) != 0) {
+//                            continue;
+//                        }
+//
+//                        const auto n_div_d = n / d;
+//
+//                        if (isCoprime(numberCache[n_div_d], number_r)) {
+//                            continue;
+//                        }
 
                         if (ro_1_mod_psi_r != ro.phi_1() % psi_r) {
                             continue;
@@ -2028,17 +2070,32 @@ PROFILE void computeEven(Number &number, Scalar c) {
                         if (!computeFunction(n, pi, t, function)) {
                             continue;
                         }
+
+                        bool ok = true;
+                        for (std::size_t i = 0; i < psiFunction.size(); ++i) {
+                            if (e * psiFunction[i] != function[e * i]) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                        if (!ok) {
+                            continue;
+                        }
+
                         if (!isPermutation(function)) {
+                            throw "";
                             continue;
                         }
 
                         orbit1.resize(r);
                         if (!computeOrbit1(function, orbit1)) {
+                            throw "";
                             continue;
                         }
 
                         //TODO: ktore checky treba robit?
                         if (!compareOrbits(t, orbit1)) {
+                            throw "";
                             continue;
                         }
 //                        if (!checkPowerCycles(exponent, power, orbit1)) {
@@ -2293,7 +2350,7 @@ PROFILE CompactSkewMorphism compactQuotient(const CompactSkewMorphism &compact) 
     const auto one = 1 % compact.pi.size();
     ro_pi.push_back(one);
     if (orbit1.size() > 1) {
-        for (std::size_t i = 1; orbit1[i] % compact.pi.size() != one; ++i) {
+        for (std::size_t i = 1; orbit1[i] % compact.pi.size() != one; ++i) {//TODO: mod(Orbit)
             ro_pi.push_back(orbit1[i] % compact.pi.size());
         }
     }
@@ -2567,14 +2624,14 @@ int main(int argc, char *argv[]) {
             print(number);
         }
 
-        for (const auto &skew: number.skewMorphisms.skews) {
-            if (skew->c() % 2 == 1) {
-                const auto &q = quotient(*skew);
-                if (skew->r() % q.r() != 0) {
-                    throw "";
-                }
-            }
-        }
+//        for (const auto &skew: number.skewMorphisms.skews) {
+//            if (skew->c() % 2 == 1) {
+//                const auto &q = quotient(*skew);
+//                if (skew->r() % q.r() != 0) {
+//                    throw "";
+//                }
+//            }
+//        }
 
         std::ofstream file;
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
