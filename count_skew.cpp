@@ -1450,6 +1450,23 @@ std::string to_json(const SkewMorphism &skewMorphism) {
     return result;
 }
 
+std::string to_json(const WeakClassRepresentant &weakClassRepresentant) {
+    std::string result;
+    bool first = true;
+    result += "[";
+    Scalar value = 0;
+    for (const auto &powerValue: weakClassRepresentant.quotientOrbitOf(1)) {
+        value += weakClassRepresentant.orbit1(powerValue);
+        if (value > weakClassRepresentant.n()) {
+            value -= weakClassRepresentant.n();
+        }
+        result += (first ? "" : ",") + std::to_string(value);
+        first = false;
+    }
+    result += "]";
+    return result;
+}
+
 PROFILE bool isSkewMorphism(const CompactSkewMorphism &compact, const OrbitsContainer &orbits, const Function& function) {
     const auto n = static_cast<Scalar>(function.size());
     bool good = true;
@@ -2715,6 +2732,27 @@ int main(int argc, char *argv[]) {
                 ;
     }
 
+    for (auto n = A; n <= N; ++n) {
+        std::ofstream output("../html/dist/data/" + std::to_string(n) + ".json");
+        output << "[";
+        bool first = true;
+        const auto& number = numberCache[n];
+        for (const auto &c: number.skewMorphisms.classes) {
+            for (const auto &cc: c) {
+                const auto& skew = *cc.weakClassRepresentant;
+                if (first) {
+                    first = false;
+                } else {
+                    output << ",";
+                }
+                output << "\n";
+                output << to_json(skew);
+            }
+        }
+        output << "\n]\n";
+    }
+
+
     std::unordered_map<std::size_t, std::vector<const WeakClassRepresentant *>> quotientOfMap;
 
     for (auto n = 1; n <= N; ++n) {
@@ -2722,8 +2760,7 @@ int main(int argc, char *argv[]) {
         for (const auto &c: number.skewMorphisms.classes) {
             for (const auto &cc: c) {
                 const auto& skew = *cc.weakClassRepresentant;
-                auto iterator = quotientOfMap.find(skew.quotientClassHash());
-                if (iterator == quotientOfMap.end()) {
+                if (auto iterator = quotientOfMap.find(skew.quotientClassHash()); iterator == quotientOfMap.end()) {
                     quotientOfMap[skew.quotientClassHash()] = {&skew};
                 } else {
                     iterator->second.push_back(&skew);
@@ -2732,30 +2769,20 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    for (const auto& pair: quotientOfMap) {
-        std::ofstream output("../html/quotient-of/" + std::to_string(pair.first) + ".json");
+    for (const auto& [hash, skews]: quotientOfMap) {
+        std::ofstream output("../html/quotient-of/" + std::to_string(hash) + ".json");
         output << "[";
         bool first = true;
-        for (const auto* skew: pair.second) {
+        for (const auto* skew: skews) {
             if (first) {
                 first = false;
             } else {
                 output << ",";
             }
             output << "\n";
-            output << "[";
-            bool first = true;
-            for (const auto p: skew->quotientOrbitOf(1)) {
-                if (first) {
-                    first = false;
-                } else {
-                    output << ", ";
-                }
-                output << skew->orbit1(p);
-            }
-            output << "]";
+            output << to_json(*skew);
         }
-        output << "]\n";
+        output << "\n]\n";
     }
 
 
