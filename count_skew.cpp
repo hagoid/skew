@@ -1295,6 +1295,10 @@ PROFILE void sOtherThan1(const Scalar d, const Number &number_n_div_d, SkewMorph
                                     const auto &number_gcd_nh_b_b = numberCache[gcd_nh_b_b];
                                     const auto increment = numberCache[d].phi * number_rH.phi * gcd_nh_b_b * number_gcd_nh_b.phi / number_gcd_nh_b_b.phi;//TODO: can be precompted;
 
+                                    // if (increment != number_r.phi * numberCache[d].phi) {
+                                    //     throw "";
+                                    // }
+
                                     auto increment2 = 0;
                                     const auto n = d * number_n_div_d.n;
                                     auto &number_n_h = numberCache[n_h];
@@ -1441,9 +1445,13 @@ std::string to_json(const SkewMorphism &skewMorphism) {
     std::string result;
     bool first = true;
     result += "[";
-    auto orbits = computePermutation(skewMorphism.n(), OrbitContainer{skewMorphism.pi()}, OrbitContainer{skewMorphism.orbit1()}).orbits;
-    for (const auto &orbit: orbits) {
-        result += (first ? "" : ",") + to_json(orbit);
+    Scalar value = 0;
+    for (const auto &powerValue: skewMorphism.pi()) {
+        value += skewMorphism.orbit1(powerValue);
+        if (value > skewMorphism.n()) {
+            value -= skewMorphism.n();
+        }
+        result += (first ? "" : ",") + std::to_string(value);
         first = false;
     }
     result += "]";
@@ -1740,6 +1748,7 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
 
     const auto &skewIndexMap = number.skewMorphisms.skewIndexMap;
     if (skewIndexMap.find(compact) != skewIndexMap.end()) {
+        throw "";
         return;
     }
 
@@ -2287,18 +2296,19 @@ PROFILE void countSkewmorphisms(Number &number) {
     number.skewMorphisms.automorphismsEnd = number.skewMorphisms.skews.size();
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
-        const auto maxPrime = getMaxPrime(number);
-        const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
-        for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
-            if (d == 1) {
-                continue;
-            }
-            const auto n_div_d = n / d;
-            auto &number_n_div_d = numberCache[n_div_d];
-
-            sEquals1(d, number_n_div_d, number.skewMorphisms);
-            sOtherThan1(d, number_n_div_d, number.skewMorphisms);
-        }
+        // const auto maxPrime = getMaxPrime(number);
+        // const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
+        // for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
+        //     if (d == 1) {
+        //         continue;
+        //     }
+        //     const auto n_div_d = n / d;
+        //     auto &number_n_div_d = numberCache[n_div_d];
+        //
+        //     sEquals1(d, number_n_div_d, number.skewMorphisms);
+        //     sOtherThan1(d, number_n_div_d, number.skewMorphisms);
+        // }
+        computeEven(number, 2);
         number.skewMorphisms.preservingEnd = number.skewMorphisms.skews.size();
 
         if (number.powerOfTwo > 16 || !number.squareFree) {
@@ -2642,9 +2652,11 @@ int main(int argc, char *argv[]) {
             }
 //            fprint(number, std::cerr);
 //        }
-        if (getSkewCount(number.skewMorphisms) != number.phi) {
-            print(number);
-        }
+        // if (getSkewCount(number.skewMorphisms) != number.phi) {
+            // print(number);
+        // }
+
+        std::cout << n << "," << number.skewMorphisms.skews.size() << "," << getClassesCount(number.skewMorphisms) << "," << getProperClassesCount(number.skewMorphisms) << std::endl;
 
 //        for (const auto &skew: number.skewMorphisms.skews) {
 //            if (skew->c() % 2 == 1) {
@@ -2739,14 +2751,24 @@ int main(int argc, char *argv[]) {
         const auto& number = numberCache[n];
         for (const auto &c: number.skewMorphisms.classes) {
             for (const auto &cc: c) {
-                const auto& skew = *cc.weakClassRepresentant;
                 if (first) {
                     first = false;
                 } else {
                     output << ",";
                 }
-                output << "\n";
-                output << to_json(skew);
+                output << "\n[";
+                bool first = true;
+                for (Index i = cc.begin; i < cc.end; ++i) {
+                    const auto& skew = number.skewMorphisms.skews[i];
+                    if (first) {
+                        first = false;
+                    } else {
+                        output << ",";
+                    }
+                    output << "\n";
+                    output << to_json(*skew);
+                }
+                output << "\n]";
             }
         }
         output << "\n]\n";
