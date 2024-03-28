@@ -1,0 +1,16 @@
+{
+  "name": "skew",
+  "version": "1.0.0",
+  "dependencies": {
+  },
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc && npm run build:cp-public",
+    "build:cp-public": "copyfiles -f ./public/** ./dist",
+    "type": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "copyfiles": "^2.4.1"
+  }
+}
