@@ -2003,6 +2003,176 @@ PROFILE void computeOdd(Number &number, Scalar c) {
 //    printf("%d %ld\n", n, foundSkews.size());
 }
 
+PROFILE void computeEven2(Number &number, Scalar c) {
+    const auto n = number.n;
+    const auto &number_nlambda = numberCache[n * number.lambda];
+
+    const auto maxPrime = getMaxPrime(number);
+    auto n_div_maxPrime = n / maxPrime;
+
+    Function function(n, 0);
+
+    CompactSkewMorphism compactSkewMorphism;
+    const auto &skewIndexMap = number.skewMorphisms.skewIndexMap;
+
+    for (const auto m: number_nlambda.divisors) {
+        if (m >= n) {
+            continue;
+        }
+        const auto &number_m = numberCache[m];
+        if (isCoprime(number, number_m)) {
+            continue;
+        }
+        const auto r = m;
+
+        OrbitContainer t(r, 0);
+        OrbitContainer &orbit1 = compactSkewMorphism.orbit1;
+        orbit1.clear();
+        orbit1.resize(r, 0);
+
+        for (std::size_t ro_index = 0; ro_index < getProperSkewCount(number_m.skewMorphisms); ++ro_index) {
+            const auto &ro = getProperSkewByIndex(number_m.skewMorphisms, ro_index);
+
+            if (ro.c() + 1 != c) {
+                continue;
+            }
+
+            const auto d = ro.r();
+
+//            if (n % (d * maxPrime) != 0) {
+//                continue;
+//            }
+
+//            const auto n_div_d = n / d;
+
+//            if (isCoprime(numberCache[n_div_d], number_m)) {
+//                continue;
+//            }
+
+            const auto p = ro.d();
+
+            const auto &orbit1_ro = OrbitContainer{ro.orbit1()};
+
+            compactSkewMorphism.pi = orbit1_ro;  // TODO: do not copy
+
+            const auto exponent = ro.ordAut();
+            const auto ord_power = m / exponent;
+
+            clearOrbit(t);
+
+            const auto &powerQuotient = getSkewByIndex(numberCache[ord_power].skewMorphisms, ro.preservingSubgroups.find(exponent)->second);
+
+            for (std::size_t power_class_index = 0; power_class_index < getClassesCount(number.skewMorphisms); ++power_class_index) {
+                const auto &powerClass = getClass(number.skewMorphisms, power_class_index);
+                const auto &power = *powerClass.weakClassRepresentant;
+
+                if (power.r() != ord_power) {
+                    continue;
+                }
+//                if (power.orbit1(p_exponent) % d != 1) {
+//                    continue;
+//                }
+//                if (power.max_orbits() < exponent) {
+//                    continue;
+//                }
+
+                if (!quotientEquals(power, powerQuotient)) {
+                    continue;
+                }
+
+                for (Scalar a = ro.pi(1); a < n; a += d) {
+                    const auto &orbit_a = power.orbitOf(a);
+//                    if (orbit_a.isSingleElement() || orbit_a.size() != ord_power) {
+//                        continue;
+//                    }
+                    t[1] = a;
+                    periodicallyFillOrbit(exponent, 1, power, t);
+                    const auto &pi = orbit1_ro;
+                    if (!computeFunction(n, pi, t, function)) {
+                        throw "";
+                        continue;
+                    }
+                    if (!orbit_a.isSingleElement() && (orbit_a.size() != ord_power && isCoprime(numberCache[a], numberCache[*(++orbit_a.begin())]))) {
+                        throw "";
+                    }
+
+                    bool ok = true;
+                    for (Scalar i = 0; i < n; ++i) {
+                        const auto& orbitI = power.orbitOf(i);
+                        Scalar k = i;
+                        for (std::size_t j = 0; j < exponent; ++j) {
+                            k = function[k];
+                        }
+
+                        if (orbitI.isSingleElement()) {
+                            if (i != k) {
+                                ok = false;
+                                break;
+                            }
+                        } else {
+                            if (*(++orbitI.begin()) != k) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!ok) {
+                        continue;
+                    }
+                    if (n % d != 0) {
+                        throw;
+                    }
+
+                    if (orbit_a.isSingleElement() || orbit_a.size() != ord_power) {
+                        throw;
+                        continue;
+                    }
+
+
+                    if (!isPermutation(function)) {
+                        throw "";
+                        continue;
+                    }
+
+                    if (!computeOrbit1(function, orbit1)) {
+                        throw "";
+                        continue;
+                    }
+
+                    if (!checkFirstPMod(ro, orbit1)) {
+                        throw "";
+                        continue;
+                    }
+                    //TODO: ktore checky treba robit?
+                    if (!compareOrbits(t, orbit1)) {
+                        throw "";
+                        continue;
+                    }
+                    if (!checkPowerCycles(exponent, power, orbit1)) {
+                        throw "";
+                        continue;
+                    }
+
+                    if (skewIndexMap.find(compactSkewMorphism) != skewIndexMap.end()) {
+                        continue;
+                    }
+
+                    auto permutation = computePermutation(orbit1, function);
+
+                    if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
+                        throw "";
+                        continue;
+                    }
+
+                    addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
+                }
+            }
+        }
+    }
+    //printf("\r");
+//    printf("%d %ld\n", n, foundSkews.size());
+}
+
 PROFILE std::vector<std::pair<Scalar, OrbitContainer>>
 bbb(const Scalar n, const Scalar e, const Scalar n_div_e, const WeakClassRepresentant &psi) {
     std::vector<std::pair<Scalar, OrbitContainer>> ts;

@@ -1,3 +1,6 @@
+~/.gitconfig autocrlf
+
+
 fetch('data/18.json')
     .then((response) => response.json())
     .then((json) => console.log((<Array<Array<number>>> json).map(x => create(x, 18))));
