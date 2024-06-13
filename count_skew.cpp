@@ -5,6 +5,7 @@
 #include <ostream>
 #include <set>
 #include <vector>
+#include <iostream>
 
 #ifdef PROFILE_FLAG
 #  define PROFILE __attribute__((noinline))
@@ -25,6 +26,7 @@ struct Number {//TODO: Cn
     Scalar phi = 0;
     Scalar lambda = 0;
     Scalar nskew = 0;
+    Scalar nskewOrder4 = 0;
     bool squareFree = true;
 };
 
@@ -334,7 +336,10 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
     std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
     std::vector<Scalar> powers;//TODO: global
     powers.reserve(number_n_div_d.n);
-    for (const auto n_h : number_n_div_d.divisors) {
+    if (number_n_div_d.n % 4 != 0) {
+        return 0;
+    }
+    for (const auto n_h : {4}) {
         if (n_h < d) {//TODO: range from second / except last / skip based on predicate
             continue;
         }
@@ -383,6 +388,9 @@ PROFILE Scalar sEquals1(const Scalar d, const Number &number_n_div_d) {
 
 PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
     Scalar nskew = 0;
+    if (d != 2) {
+        return 0;
+    }
     for (const auto gcd_b: number_n_div_d.divisors) {
         if (gcd_b == number_n_div_d.n) {
             continue;
@@ -398,6 +406,9 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
         powers.reserve(number_n_div_d.n);
         for (const auto coprime_b: number_n_b.coprimes) {
             const auto b = gcd_b * coprime_b;
+            if ((b + 2) % number_n_b.n != 0){
+                continue;
+            }
             const auto s = b + 1;
             if (visited_s[s]) {
                 continue;
@@ -420,6 +431,9 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 visited_s[powers[coprime_rH]] = true;
             }
             powers.clear();
+            if (rH != 2) {
+                continue;
+            }
             power_sum = power_sum % number_n_div_d.n;//TODO: treba toto modulovat? alias n_div_d
             const auto power_sum_b = power_sum / number_n_b.n;
             const auto min_r = d * rH;//TODO: better estimate?
@@ -438,14 +452,14 @@ PROFILE Scalar sOtherThan1(const Scalar d, const Number &number_n_div_d) {
                 const auto &number_gcd_nh_b = numberCache[gcd_nh_b];
                 const auto g_p = gcd(numberCache[power_sum_b], number_gcd_nh_b);
                 const auto g_r = gcd_nh_b / g_p;
-                if (g_r < d) {
+                if (g_r != 2) {
                     continue;
                 }
                 const auto r = rH * g_r;
                 auto &number_r = numberCache[r];
-                if (number_r.lambda % d != 0) {
-                    continue;
-                }
+//                if (number_r.lambda % d != 0) {
+//                    continue;
+//                }
                 for (auto e = rH + 1; e < r; e += rH) {
                     if (visited_e[e]) {
                         continue;
@@ -496,14 +510,15 @@ PROFILE void countSkewmorphisms(Number &number) {
     }
     const auto n = number.n;
     const auto phi = number.phi;
-    auto nskew = phi;
+    auto nskew = 0;
+    number.nskew = 1;
 
     if (gcd(number, numberCache[phi]) > 1) {//TODO: toto viem nejako vyuzit a predratat?
-        if (const auto p_1_q_1 = isPQ(number)) {
-            nskew += p_1_q_1;
-        } else if (const auto a_b = isAB(number)) {
-            nskew = a_b;
-        } else {
+//        if (const auto p_1_q_1 = isPQ(number)) {
+//            nskew += p_1_q_1;
+//        } else if (const auto a_b = isAB(number)) {
+//            nskew = a_b;
+//        } else {
             const auto maxPrime = getMaxPrime(number);
             const auto &number_n_div_maxPrime = numberCache[n / maxPrime];
             for (const auto d: number_n_div_maxPrime.divisors) {//TODO: iterate over n_d first
@@ -516,9 +531,9 @@ PROFILE void countSkewmorphisms(Number &number) {
                 nskew += sEquals1(d, number_n_div_d);
                 nskew += sOtherThan1(d, number_n_div_d);
             }
-        }
+//        }
     }
-    number.nskew = nskew;
+    number.nskewOrder4 = nskew;
 }
 
 void print(const Number &number) {
@@ -559,7 +574,7 @@ int main(int argc, char *argv[]) {
     }
 
     prepareNumbers(N);
-
+    int i = 0;
     while (!toCountWithMultiples.empty()) {
         const auto p = *toCountWithMultiples.rbegin();
         const auto lowerMultiplier = (A + p - 1) / p;
@@ -568,8 +583,9 @@ int main(int argc, char *argv[]) {
             const auto n = multiplier * p;
 
             auto &number = numberCache[n];
-            if (number.powerOfTwo <= 16 && number.squareFree) {
+            if (number.nskew == 0) {
                 countSkewmorphisms(number);
+                printf("\r%d", ++i);
 //                fprint(number, std::cerr);
             }
 
@@ -582,12 +598,20 @@ int main(int argc, char *argv[]) {
 //        }
         toCountWithMultiples.erase(p);
     }
+    auto max = 0;
+    auto maxN = 0;
     for (auto n = A; n <= N; ++n) {
         const auto &number = numberCache[n];
-        if (number.nskew != 0) {
-            print(number);
+        if (number.nskewOrder4 != 0) {
+            if (max < number.nskewOrder4) {
+                max = number.nskewOrder4;
+                maxN = n;
+            }
+            const auto nskew = number.nskewOrder4;
+            printf("%d, %d\n", n, number.nskewOrder4);
         }
     }
+    printf("\n\n%d,%d\n", maxN, max);
 
     return 0;
 }
