@@ -585,7 +585,7 @@ int main(int argc, char *argv[]) {
             auto &number = numberCache[n];
             if (number.nskew == 0) {
                 countSkewmorphisms(number);
-                printf("\r%d", ++i);
+                std::cerr << "\r" << ++i << std::flush;
 //                fprint(number, std::cerr);
             }
 
@@ -608,10 +608,10 @@ int main(int argc, char *argv[]) {
                 maxN = n;
             }
             const auto nskew = number.nskewOrder4;
-            printf("%d, %d\n", n, number.nskewOrder4);
+            printf("%d,%d\n", n, number.nskewOrder4);
         }
     }
-    printf("\n\n%d,%d\n", maxN, max);
+//    printf("\n\n%d,%d\n", maxN, max);
 
     return 0;
 }
