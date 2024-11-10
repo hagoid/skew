@@ -1789,6 +1789,8 @@ PROFILE void computeProperNotPreserving(Number &number) {
     }
 }
 
+std::set<std::pair<Scalar, Scalar>> complexities;
+
 PROFILE void computeOdd(Number &number, Scalar c) {
     const auto n = number.n;
     const auto &number_nlambda = numberCache[n * number.lambda];
@@ -1906,6 +1908,7 @@ PROFILE void computeOdd(Number &number, Scalar c) {
                         continue;
                     }
 
+                    complexities.emplace(c, power.c());
                     addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
                 }
             }
@@ -2053,9 +2056,9 @@ PROFILE void computeEven(Number &number, Scalar c) {
                         auto permutation = computePermutation(orbit1, function);
 
                         if (!isSkewMorphism(compactSkewMorphism, permutation.orbits, function)) {
-                            throw "";
                             continue;
                         }
+                        complexities.emplace(c, psi.c());
 
                         addSkewClassByRepresentant(compactSkewMorphism, std::move(permutation), n);
                     }
@@ -2567,15 +2570,26 @@ int main(int argc, char *argv[]) {
             print(number);
         }
 
-        for (const auto &skew: number.skewMorphisms.skews) {
-            if (skew->c() % 2 == 1) {
-                const auto &q = quotient(*skew);
-                if (skew->r() % q.r() != 0) {
-                    throw "";
+
+        const auto cubeFree = [](const Number &number) -> bool {
+            for (std::size_t i = 0; i < number.primes.size(); ++i) {
+                if (number.primes[i] == 2) {
+                    continue;
+                }
+                if (number.powersOfPrimes[i] > number.primes[i] * number.primes[i]) {
+                    return false;
+                }
+                if (number.powersOfPrimes[i] > number.primes[i] && !isCoprime(number, numberCache[number.primes[i] - 1])) {
+                    return false;
                 }
             }
-        }
+            return true;
+        };
 
+        if ((number.skewMorphisms.classes.size() == 4) != (number.powerOfTwo < 64 && cubeFree(number))) {
+            printf("!!!! %d\n", n);
+        }
+        
         std::ofstream file;
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
         for (std::size_t i = 0; i < 2; ++i) {
@@ -2653,6 +2667,9 @@ int main(int argc, char *argv[]) {
                 ;
     }
 
+    for (const auto &complexity: complexities) {
+        printf("%d,%d\n", complexity.first, complexity.second);
+    }
 
     return 0;
 }
