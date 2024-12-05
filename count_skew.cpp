@@ -974,6 +974,34 @@ PROFILE SkewMorphism &powerOf(const SkewMorphism &skewMorphism, const std::pair<
     return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
 }
 
+PROFILE SkewMorphism &mod(const SkewMorphism &skewMorphism, Scalar n) {
+    auto &skewMorphisms = numberCache[n].skewMorphisms;
+    if (n == 1) {
+        return getSkewByIndex(skewMorphisms, 0);
+    }
+    const auto orbit1 = OrbitContainer{skewMorphism.orbit1()};
+    const auto pi = OrbitContainer{skewMorphism.pi()};
+    CompactSkewMorphism compactOther;
+    compactOther.orbit1.push_back(1);
+    if (orbit1.size() > 1) {
+        for (std::size_t i = 1; i < orbit1.size() && orbit1[i] % n != 1; ++i) {
+            compactOther.orbit1.push_back(orbit1[i] % n);
+        }
+    }
+    const Scalar r = compactOther.orbit1.size();
+    if (r > 1) {
+        compactOther.pi.push_back(1);
+        for (std::size_t i = 1; i < pi.size() && pi[i] % r != 1; ++i) {
+            compactOther.pi.push_back(pi[i] % r);
+        }
+    } else {
+        compactOther.pi.push_back(0);
+    }
+    compactOther.orbit1.shrink_to_fit();
+    compactOther.pi.shrink_to_fit();
+    return getSkewByIndex(skewMorphisms, skewMorphisms.skewIndexMap.find(compactOther)->second);
+}
+
 PROFILE std::uint64_t cyrb53(const std::vector<Scalar> &vector, std::uint32_t seed = 0) {
     std::uint32_t h1 = 0xdeadbeef ^ seed;
     std::uint32_t h2 = 0x41c6ce57 ^ seed;
@@ -1534,6 +1562,18 @@ PROFILE bool computeOrbit1(const Function &function, OrbitContainer &orbit1) {
     return c == 1 && index == orbit1.size();
 }
 
+PROFILE OrbitContainer computeOrbit1(const Function &function) {
+    OrbitContainer orbit1;
+    Scalar c = 1;
+    std::size_t index = 0;
+    do {
+        orbit1.push_back(c);
+        c = function[c];
+        ++index;
+    } while (c != 1);
+    return orbit1;
+}
+
 PROFILE bool compareOrbits(const OrbitContainer &sparseOrbit, const OrbitContainer &orbit2) {
     for (std::size_t i = 0; i < sparseOrbit.size(); ++i) {
         if (sparseOrbit[i] == 0) {
@@ -1568,6 +1608,7 @@ PROFILE bool checkFirstPMod(const SkewMorphism &ro, const OrbitContainer &orbit1
     }
     return true;
 }
+
 
 PROFILE SkewMorphism &getSkewByIndex(SkewMorphisms &skewMorphisms, std::size_t index) {
     return *skewMorphisms.skews[index];
@@ -2588,6 +2629,209 @@ int main(int argc, char *argv[]) {
 
         if ((number.skewMorphisms.classes.size() == 4) != (number.powerOfTwo < 64 && cubeFree(number))) {
             printf("!!!! %d\n", n);
+        }
+
+        auto found = std::vector<bool>(number.skewMorphisms.skews.size(), false);
+        for (std::size_t i = 0; i < number.skewMorphisms.skews.size(); ++i) {
+            found[i] = number.skewMorphisms.skews[i]->c() < 1;
+        }
+        for (const auto &beta_: number.skewMorphisms.skews) {
+            if (n == 1) { //!!!!
+                continue;
+            }
+            const auto &beta = *beta_;
+            const auto ord_beta = beta.r();
+            for (Scalar m = 2; m <= n / ord_beta; ++m) {//!!!! m >= 2
+                for (const auto &alpha_: numberCache[m * ord_beta].skewMorphisms.skews) {
+                    const auto &alpha = * alpha_;
+                    if (alpha.c() % 2 != 0 || alpha.ordAut() != m) {
+                        continue;
+                    }
+                    for (Scalar h = 0; h < n; ++h) {
+                        Function phi_function(n, 0);
+                        for (std::size_t i = 1; i <= n; ++i) {
+                            phi_function[i % n] = (phi_function[i - 1] + beta.orbitOf(h)[(alpha.orbit1(i - 1) - 1) / m]) % n;
+                        }
+
+                        bool a = true;
+                        auto visited = std::vector<bool>(n, false);
+                        Scalar t = 1;
+                        for (Scalar x = 0; !visited[t] || x % alpha.pi().size() != 0; ++x) {
+                            visited[t] = true;
+                            if ((t % alpha.r()) != alpha.pi(x)) {
+                                a = false;
+                                break;
+                            }
+                            t = phi_function[t];
+                        }
+
+                        const auto &powerQuotient = getSkewByIndex(numberCache[ord_beta].skewMorphisms, alpha.preservingSubgroups.find(m)->second);
+                        bool b = &quotient(beta) == &powerQuotient;
+
+                        bool c = true;
+
+                        for (Scalar x = 0; x < n; ++x) {
+                            Scalar phi_m_x = x;
+                            for (Scalar i = 0; i < m; ++i) {
+                                phi_m_x = phi_function[phi_m_x];
+                            }
+                            if (phi_m_x != beta.orbitOf(x)[1]) {
+                                c = false;
+                                break;
+                            }
+                        }
+
+                        if (!a) {
+                            continue;
+                        }
+                        if (!b) {
+                            continue;
+                        }
+                        if (!c) {
+                            continue;
+                        }
+
+                        if (!isPermutation(phi_function)) {
+                            throw "";
+                        }
+                        const auto orbit1 = computeOrbit1(phi_function);
+                        const auto permutation = computePermutation(orbit1, phi_function);
+
+                        if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
+                            throw "";
+                        }
+                        const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
+                        if (found[index]) {
+                            throw "";
+                        }
+                        found[index] = true;
+                    }
+                }
+            }
+        }
+        for (const Scalar m : number.divisors) {
+            if (m == 1) {
+                continue;
+            }
+            for (const auto &beta_: numberCache[n / m].skewMorphisms.skews) {
+                const auto &beta = *beta_;
+                for (Scalar l = 1; l < n; ++l) {
+                    for (const auto &alpha_ : numberCache[l].skewMorphisms.skews) {
+                        const auto &alpha = *alpha_;
+                        if (alpha.c() % 2 != 1 || alpha.ordAut() != m) {
+                            continue;
+                        }
+                        for (Scalar f = 0; f < n / m; ++f) {
+                            // OrbitContainer psi(l, 0);
+                            // psi[0] = 1;
+                            // for (Scalar i = 1; i < l; ++i) {
+                            //     psi[i] = (psi[i - 1] + beta.orbitOf(f)[alpha.orbitOf(i - 1)[1]] * m) % n;
+                            // }
+                            OrbitContainer psi;
+                            psi.push_back(1);
+                            for (Scalar i = 1; i < n; ++i) {
+                                Scalar t = (1 + (beta.orbitOf((psi.back() - 1) / m)[alpha.orbit1(1)] + f) * m) % n;
+                                if (t == 1) {
+                                    break;
+                                }
+                                psi.push_back(t);
+                            }
+                            Function phi_function(n, 0);
+                            for (std::size_t i = 1; i <= n; ++i) {
+                                phi_function[i % n] = (phi_function[i - 1] + psi[alpha.orbit1(i - 1)]) % n;
+                            }
+
+                            bool a = true;
+                            for (Scalar x = 0; x < psi.size(); ++x) {
+                                if ((psi[x] % alpha.r()) != alpha.pi(x)) {
+                                    a = false;
+                                    break;
+                                }
+                            }
+
+                            bool b = true;
+                            const auto &alpha_m = powerOf(alpha, *quotient(alpha).preservingSubgroups.find(m), numberCache[l].skewMorphisms);
+                            if (alpha_m.preservingSubgroups.find(beta.r()) != alpha_m.preservingSubgroups.end()) {
+                                const auto &powerQuotient = mod(alpha_m, beta.r());;
+                                b = &quotient(beta) == &powerQuotient;
+                            } else {
+                                b = false;
+                            }
+
+                            bool c = true;
+                            for (Scalar x = 0; x < n / m; ++x) {
+                                if (phi_function[x * m] != beta.orbitOf(x)[1] * m) {
+                                    c = false;
+                                    break;
+                                }
+                            }
+
+                            // bool d = true;
+                            // for (Scalar x = 0; x < n; ++x) {
+                                // Scalar phi_m = m;
+                                // for (Scalar i = 0; i < alpha.orbit1(x); ++i) {
+                                    // phi_m = phi_function[phi_m];
+                                // }
+                                // if (phi_function[(x + m) % n] != (phi_function[x] + phi_m) % n) {
+                                    // d = false;
+                                    // break;
+                                // }
+                            // }
+
+                            // bool e = (n * number.lambda) % l == 0;
+
+                            bool d = l == psi.size();
+                            bool e = true;
+                            Scalar old = 1;
+                            for (std::size_t index = 1; index < psi.size(); ++index) {
+                                const auto &x = psi[index];
+                                if (phi_function[old] != x) {
+                                    e = false;
+                                    break;
+                                }
+                                old = x;
+                            }
+                            e = e && (phi_function[old] == 1);
+
+                            if (!a) {
+                                continue;
+                            }
+                            if (!b) {
+                                continue;
+                            }
+                            if (!c) {
+                                continue;
+                            }
+                            if (!d) {
+                                continue;
+                            }
+                            if (!e) {
+                                continue;
+                            }
+
+                            if (!isPermutation(phi_function)) {
+                                throw "";
+                            }
+                            const auto orbit1 = computeOrbit1(phi_function);
+                            const auto permutation = computePermutation(orbit1, phi_function);
+
+                            if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
+                                throw "";
+                            }
+                            const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
+                            if (found[index]) {
+                                throw "";
+                            }
+                            found[index] = true;
+                        }
+                    }
+                }
+            }
+        }
+        if (n != 1) {
+            if (!std::ranges::all_of(found, std::identity())) {
+                throw "";
+            }
         }
         
         std::ofstream file;
