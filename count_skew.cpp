@@ -2588,7 +2588,7 @@ int main(int argc, char *argv[]) {
             if (d >= a) {
                 continue;
             }
-            if (isCoprime(numberCache[a], numberCache[d])) {
+            if (isCoprime(numberCache[a], numberCache[d]) && d != 1) {
                 continue;
             }
             if (computeSet.find(d) == computeSet.end()) {
@@ -2633,7 +2633,7 @@ int main(int argc, char *argv[]) {
 
         auto found = std::vector<bool>(number.skewMorphisms.skews.size(), false);
         for (std::size_t i = 0; i < number.skewMorphisms.skews.size(); ++i) {
-            found[i] = number.skewMorphisms.skews[i]->c() < 1;
+            found[i] = number.skewMorphisms.skews[i]->c() < 2;
         }
         for (const auto &beta_: number.skewMorphisms.skews) {
             if (n == 1) { //!!!!
@@ -2722,20 +2722,25 @@ int main(int argc, char *argv[]) {
                             continue;
                         }
                         for (Scalar f = 0; f < n / m; ++f) {
-                            // OrbitContainer psi(l, 0);
-                            // psi[0] = 1;
-                            // for (Scalar i = 1; i < l; ++i) {
-                            //     psi[i] = (psi[i - 1] + beta.orbitOf(f)[alpha.orbitOf(i - 1)[1]] * m) % n;
-                            // }
-                            OrbitContainer psi;
-                            psi.push_back(1);
-                            for (Scalar i = 1; i < n; ++i) {
-                                Scalar t = (1 + (beta.orbitOf((psi.back() - 1) / m)[alpha.orbit1(1)] + f) * m) % n;
-                                if (t == 1) {
-                                    break;
+                            OrbitContainer psi(l + 1, 0);
+                            psi[0] = 1;
+                            Scalar ord_psi = 0;
+                            for (Scalar i = 1; i < l + 1; ++i) {
+                                psi[i] = (psi[i - 1] + beta.orbitOf(f)[alpha.orbitOf(i - 1)[1]] * m) % n;
+                                if (ord_psi == 0 && psi[i] == 1)
+                                {
+                                    ord_psi = i;
                                 }
-                                psi.push_back(t);
                             }
+                            // OrbitContainer psi;
+                            // psi.push_back(1);
+                            // for (Scalar i = 1; i < n; ++i) {
+                            //     Scalar t = (1 + (beta.orbitOf((psi.back() - 1) / m)[alpha.orbit1(1)] + f) * m) % n;
+                            //     if (t == 1) {
+                            //         break;
+                            //     }
+                            //     psi.push_back(t);
+                            // }
                             Function phi_function(n, 0);
                             for (std::size_t i = 1; i <= n; ++i) {
                                 phi_function[i % n] = (phi_function[i - 1] + psi[alpha.orbit1(i - 1)]) % n;
@@ -2766,32 +2771,33 @@ int main(int argc, char *argv[]) {
                                 }
                             }
 
-                            // bool d = true;
-                            // for (Scalar x = 0; x < n; ++x) {
-                                // Scalar phi_m = m;
-                                // for (Scalar i = 0; i < alpha.orbit1(x); ++i) {
-                                    // phi_m = phi_function[phi_m];
-                                // }
-                                // if (phi_function[(x + m) % n] != (phi_function[x] + phi_m) % n) {
-                                    // d = false;
-                                    // break;
-                                // }
-                            // }
-
-                            // bool e = (n * number.lambda) % l == 0;
-
-                            bool d = l == psi.size();
-                            bool e = true;
-                            Scalar old = 1;
-                            for (std::size_t index = 1; index < psi.size(); ++index) {
-                                const auto &x = psi[index];
-                                if (phi_function[old] != x) {
-                                    e = false;
+                            bool d = true;
+                            for (Scalar x = 0; x < n; ++x) {
+                                Scalar phi_m = m;
+                                for (Scalar i = 0; i < alpha.orbit1(x); ++i) {
+                                    phi_m = phi_function[phi_m];
+                                }
+                                if (phi_function[(x + m) % n] != (phi_function[x] + phi_m) % n) {
+                                    d = false;
                                     break;
                                 }
-                                old = x;
                             }
-                            e = e && (phi_function[old] == 1);
+
+                            bool e = l == ord_psi;
+
+                            // bool d = true;
+                            // Scalar old = 1;
+                            // for (std::size_t index = 1; index < psi.size(); ++index) {
+                            //     const auto &x = psi[index];
+                            //     if (phi_function[old] != x) {
+                            //         d = false;
+                            //         break;
+                            //     }
+                            //     old = x;
+                            // }
+                            // d = d && (phi_function[old] == 1);
+
+                            // bool e = l == psi.size();
 
                             if (!a) {
                                 continue;
