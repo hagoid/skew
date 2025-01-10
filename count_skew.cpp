@@ -2692,16 +2692,31 @@ int main(int argc, char *argv[]) {
                         }
 
                         if (!isPermutation(phi_function)) {
+                            std::cout << "perm" << std::endl;
+                            std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+                            std::cout << "alpha: " << to_json(alpha) << std::endl;
+                            std::cout << "beta: " << to_json(beta) << std::endl;
+                            std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                             throw "";
                         }
                         const auto orbit1 = computeOrbit1(phi_function);
                         const auto permutation = computePermutation(orbit1, phi_function);
 
                         if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
+                            std::cout << "skew" << std::endl;
+                            std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+                            std::cout << "alpha: " << to_json(alpha) << std::endl;
+                            std::cout << "beta: " << to_json(beta) << std::endl;
+                            std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                             throw "";
                         }
                         const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
                         if (found[index]) {
+                            std::cout << "perm" << std::endl;
+                            std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+                            std::cout << "alpha: " << to_json(alpha) << std::endl;
+                            std::cout << "beta: " << to_json(beta) << std::endl;
+                            std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                             throw "";
                         }
                         found[index] = true;
@@ -2732,6 +2747,12 @@ int main(int argc, char *argv[]) {
                                     ord_psi = i;
                                 }
                             }
+
+                            bool e = l == ord_psi;
+                            if (!e) {
+                                continue;
+                            }
+
                             // OrbitContainer psi;
                             // psi.push_back(1);
                             // for (Scalar i = 1; i < n; ++i) {
@@ -2783,8 +2804,6 @@ int main(int argc, char *argv[]) {
                                 }
                             }
 
-                            bool e = l == ord_psi;
-
                             // bool d = true;
                             // Scalar old = 1;
                             // for (std::size_t index = 1; index < psi.size(); ++index) {
@@ -2803,6 +2822,9 @@ int main(int argc, char *argv[]) {
                                 continue;
                             }
                             if (!b) {
+                                if (c && d && e) {
+                                    std::cout << "B" << std::endl;
+                                }
                                 continue;
                             }
                             if (!c) {
@@ -2811,21 +2833,33 @@ int main(int argc, char *argv[]) {
                             if (!d) {
                                 continue;
                             }
-                            if (!e) {
-                                continue;
-                            }
 
                             if (!isPermutation(phi_function)) {
+                                std::cout << "perm" << std::endl;
+                                std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
+                                std::cout << "alpha: " << to_json(alpha) << std::endl;
+                                std::cout << "beta: " << to_json(beta) << std::endl;
+                                std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                                 throw "";
                             }
                             const auto orbit1 = computeOrbit1(phi_function);
                             const auto permutation = computePermutation(orbit1, phi_function);
 
                             if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
+                                std::cout << "skew" << std::endl;
+                                std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
+                                std::cout << "alpha: " << to_json(alpha) << std::endl;
+                                std::cout << "beta: " << to_json(beta) << std::endl;
+                                std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                                 throw "";
                             }
                             const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
                             if (found[index]) {
+                                std::cout << "single" << std::endl;
+                                std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
+                                std::cout << "alpha: " << to_json(alpha) << std::endl;
+                                std::cout << "beta: " << to_json(beta) << std::endl;
+                                std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                                 throw "";
                             }
                             found[index] = true;
@@ -2836,6 +2870,8 @@ int main(int argc, char *argv[]) {
         }
         if (n != 1) {
             if (!std::ranges::all_of(found, std::identity())) {
+                std::cout << "all" << std::endl;
+                std::cout << "n: " << n << std::endl;
                 throw "";
             }
         }
