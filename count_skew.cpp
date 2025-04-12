@@ -363,6 +363,7 @@ public:
 
     std::unordered_map<Scalar, std::vector<Index>> roots;
     std::unordered_map<Scalar, Index> preservingSubgroups;
+    std::vector<std::pair<Scalar, Index>> isQuotientOf;
     bool powerOfInverseOrbit = false;
     std::uint64_t hash;  // TODO: checkni ci nie su rovnake
 
@@ -1060,6 +1061,10 @@ PROFILE void addSkewMorphism(SkewMorphism skewMorphism, SkewMorphisms &skewMorph
     Index index = skews.size();
 
     skewIndexMap.insert({toCompact(skewMorphism), index});
+    const auto derived = const_cast<SkewMorphism *>(quotientPtr(toCompact(skewMorphism)));
+    if (derived != nullptr) {
+        derived->isQuotientOf.emplace_back(skewMorphism.n(), static_cast<Index>(skews.size()));
+    }
     skews.emplace_back(std::make_unique<SkewMorphism>(std::move(skewMorphism)));
 
     computeRoots(skewMorphisms, index);
@@ -2541,6 +2546,7 @@ int main(int argc, char *argv[]) {
         computeVector.push_back(n);
         computeSet.insert(n);
     }
+    computeSet.insert(1);
     for (std::size_t i = 0; i < computeVector.size(); ++i) {
         const auto a = computeVector[i];
         for (const auto d: numberCache[a * numberCache[a].lambda].divisors) {
@@ -2669,6 +2675,18 @@ int main(int argc, char *argv[]) {
 
     for (const auto &complexity: complexities) {
         printf("%d,%d\n", complexity.first, complexity.second);
+    }
+
+    for (auto n = 1; n <= N/10; ++n) {
+        const auto &number = numberCache[n];
+        for (const auto &skew: number.skewMorphisms.skews) {
+            if (n == 60 && skew->hash == 3833212593108069ull && !skew->isQuotientOf.empty()) {
+                printf("aaa %d\n", skew->isQuotientOf.front().first);
+            }
+            if (skew->isQuotientOf.empty()) {
+                printf("https://skew.hagara.site/skew/%d.html?auto=true&coset=true&other=true&inv=true&mod=%d#%lld\n", skew->n(), skew->n(), skew->hash);
+            }
+        }
     }
 
     return 0;
