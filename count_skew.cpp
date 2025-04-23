@@ -361,6 +361,9 @@ public:
 
     bool inverseOrbit() const;
 
+    Scalar asFunction(Scalar x) const;
+    const OrbitContainer &asOrbit(Scalar x) const;
+
     std::unordered_map<Scalar, std::vector<Index>> roots;
     std::unordered_map<Scalar, Index> preservingSubgroups;
     bool powerOfInverseOrbit = false;
@@ -373,6 +376,8 @@ private:
     Scalar e;
     Scalar eInv;
     Scalar _phi_1;
+    Function _asFunction;
+    OrbitsContainer _asOrbits;
 };
 
 PROFILE WeakClassRepresentant::WeakClassRepresentant(Permutation permutation, const SkewMorphism *quotient) : _permutation(std::move(permutation)), quotient(quotient){
@@ -1112,6 +1117,15 @@ PROFILE SkewMorphism::SkewMorphism(const WeakClassRepresentant &representant, Sc
     powerOfInverseOrbit = inverseOrbit();
 
     _phi_1 = orbit1(1);
+
+    _asFunction.resize(n());
+    for (Scalar x = 0; x < n(); ++x) {
+        _asFunction[x] = orbitOf(x)[1];
+    }
+    _asOrbits.resize(n());
+    for (Scalar x = 0; x < n(); ++x) {
+        _asOrbits[x] = OrbitContainer{orbitOf(x)};
+    }
 }
 
 PROFILE Scalar SkewMorphism::c() const {
@@ -1155,6 +1169,16 @@ PROFILE bool SkewMorphism::inverseOrbit() const {
     }
     return false;
 }
+
+PROFILE Scalar SkewMorphism::asFunction(Scalar x) const {
+    return _asFunction[x];
+}
+
+PROFILE const OrbitContainer &SkewMorphism::asOrbit(Scalar x) const {
+    return _asOrbits[x];
+}
+
+
 
 PROFILE void sEquals1(const Scalar d, const Number &number_n_div_d, SkewMorphisms &skewMorphisms) {
     std::vector<bool> visited_e(number_n_div_d.n, false);//TODO: global
@@ -2557,6 +2581,90 @@ void printHtml(std::ofstream &output, const Number &number) {
     output << "\n</div>" << std::endl;
 }
 
+PROFILE Scalar calculate_orbit_container(int n, const Scalar m, const SkewMorphism &beta, Scalar l, const SkewMorphism &alpha, Scalar f, OrbitContainer &psi) {
+    psi[0] = 1;
+    const auto &orbitF = beta.asOrbit(f);
+    for (Scalar i = 1; i < l + 1; ++i) {
+        psi[i] = (psi[i - 1] + orbitF[alpha.asFunction(i - 1) % orbitF.size()] * m);
+        if (psi[i] >= n) {
+            psi[i] -= n;
+        }
+        if (psi[i] == 1)
+        {
+            return i;
+        }
+    }
+    return 0;
+}
+
+PROFILE void calculate_phi_function(int n, const SkewMorphism &alpha, const OrbitContainer &psi, Function &phi_function) {
+    phi_function = Function(n, 0);
+    const auto &alphaOrbit1 = alpha.asOrbit(1);
+    for (std::size_t i = 1; i <= n; ++i) {
+        const std::size_t index = i == n ? 0 : i;
+        phi_function[index] = phi_function[i - 1] + psi[alphaOrbit1[(i - 1) % alphaOrbit1.size()]];
+        if (phi_function[index] >= n) {
+            phi_function[index] -= n;
+        }
+    }
+}
+
+PROFILE void validate_e1(const SkewMorphism &alpha, const OrbitContainer &psi, bool &a) {
+    a = true;
+    for (Scalar x = 0; x < psi.size(); ++x) {
+        if ((psi[x] % alpha.r()) != alpha.pi(x)) {
+            a = false;
+            break;
+        }
+    }
+}
+
+PROFILE void validate_e2(const Scalar m, const SkewMorphism &beta, Scalar l, const SkewMorphism &alpha, bool &b) {
+    b = true;
+    const auto &alpha_m = powerOf(alpha, *quotient(alpha).preservingSubgroups.find(m), numberCache[l].skewMorphisms);
+    if (alpha_m.preservingSubgroups.find(beta.r()) != alpha_m.preservingSubgroups.end()) {
+        const auto &powerQuotient = mod(alpha_m, beta.r());;
+        b = &quotient(beta) == &powerQuotient;
+    } else {
+        b = false;
+    }
+}
+
+PROFILE void validate_e3(int n, const Scalar m, const SkewMorphism &beta, const Function &phi_function, bool &c) {
+    c = true;
+    for (Scalar x = 0; x < n / m; ++x) {
+        if (phi_function[x * m] != beta.orbitOf(x)[1] * m) {
+            c = false;
+            break;
+        }
+    }
+}
+
+PROFILE void validate_e4(int n, const Scalar m, const SkewMorphism &alpha, const Function &phi_function, bool &d) {
+    d = true;
+    for (Scalar x = 0; x < n; ++x) {
+        Scalar phi_m = m;
+        for (Scalar i = 0; i < alpha.orbit1(x); ++i) {
+            phi_m = phi_function[phi_m];
+        }
+        if (phi_function[(x + m) % n] != (phi_function[x] + phi_m) % n) {
+            d = false;
+            break;
+        }
+    }
+}
+
+PROFILE bool validate_e4_2(const OrbitContainer &psi, const Function &phi_function) {
+    Scalar t = psi[0];
+    for (std::size_t i = 1; i < psi.size(); ++i) {
+        if (phi_function[t] != psi[i]) {
+            return false;
+        }
+        t = psi[i];
+    }
+    return true;
+}
+
 int main(int argc, char *argv[]) {
     CLI::App app{"Compute list of skew morphisms"};
 
@@ -2634,66 +2742,183 @@ int main(int argc, char *argv[]) {
         auto found = std::vector<bool>(number.skewMorphisms.skews.size(), false);
         for (std::size_t i = 0; i < number.skewMorphisms.skews.size(); ++i) {
             found[i] = number.skewMorphisms.skews[i]->c() < 2;
-        }
-        for (const auto &beta_: number.skewMorphisms.skews) {
-            if (n == 1) { //!!!!
-                continue;
+            if (number.skewMorphisms.skews[i]->c() % 2 == 1) {
+                found[i] = true;
             }
-            const auto &beta = *beta_;
-            const auto ord_beta = beta.r();
-            for (Scalar m = 2; m <= n / ord_beta; ++m) {//!!!! m >= 2
-                for (const auto &alpha_: numberCache[m * ord_beta].skewMorphisms.skews) {
-                    const auto &alpha = * alpha_;
-                    if (alpha.c() % 2 != 0 || alpha.ordAut() != m) {
+        }
+        // for (const auto &beta_: number.skewMorphisms.skews) {
+        //     if (n == 1) { //!!!!
+        //         continue;
+        //     }
+        //     const auto &beta = *beta_;
+        //     const auto ord_beta = beta.r();
+        //     for (Scalar m = 2; m <= n / ord_beta; ++m) {//!!!! m >= 2
+        //         for (const auto &alpha_: numberCache[m * ord_beta].skewMorphisms.skews) {
+        //             const auto &alpha = * alpha_;
+        //             if (alpha.c() % 2 != 0 || alpha.ordAut() != m) {
+        //                 continue;
+        //             }
+        //             for (Scalar h = 0; h < n; ++h) {
+        //                 Function phi_function(n, 0);
+        //                 for (std::size_t i = 1; i <= n; ++i) {
+        //                     phi_function[i % n] = (phi_function[i - 1] + beta.orbitOf(h)[(alpha.orbit1(i - 1) - 1) / m]) % n;
+        //                 }
+        //
+        //                 bool a = true;
+        //                 auto visited = std::vector<bool>(n, false);
+        //                 Scalar t = 1;
+        //                 for (Scalar x = 0; !visited[t] || x % alpha.pi().size() != 0; ++x) {
+        //                     visited[t] = true;
+        //                     if ((t % alpha.r()) != alpha.pi(x)) {
+        //                         a = false;
+        //                         break;
+        //                     }
+        //                     t = phi_function[t];
+        //                 }
+        //
+        //                 const auto &powerQuotient = getSkewByIndex(numberCache[ord_beta].skewMorphisms, alpha.preservingSubgroups.find(m)->second);
+        //                 bool b = &quotient(beta) == &powerQuotient;
+        //
+        //                 bool c = true;
+        //
+        //                 for (Scalar x = 0; x < n; ++x) {
+        //                     Scalar phi_m_x = x;
+        //                     for (Scalar i = 0; i < m; ++i) {
+        //                         phi_m_x = phi_function[phi_m_x];
+        //                     }
+        //                     if (phi_m_x != beta.orbitOf(x)[1]) {
+        //                         c = false;
+        //                         break;
+        //                     }
+        //                 }
+        //
+        //                 if (!a) {
+        //                     continue;
+        //                 }
+        //                 if (!b) {
+        //                     continue;
+        //                 }
+        //                 if (!c) {
+        //                     continue;
+        //                 }
+        //
+        //                 if (!isPermutation(phi_function)) {
+        //                     std::cout << "perm" << std::endl;
+        //                     std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+        //                     std::cout << "alpha: " << to_json(alpha) << std::endl;
+        //                     std::cout << "beta: " << to_json(beta) << std::endl;
+        //                     std::cout << "phi_function: " << to_json(phi_function) << std::endl;
+        //                     throw "";
+        //                 }
+        //                 const auto orbit1 = computeOrbit1(phi_function);
+        //                 const auto permutation = computePermutation(orbit1, phi_function);
+        //
+        //                 if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
+        //                     std::cout << "skew" << std::endl;
+        //                     std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+        //                     std::cout << "alpha: " << to_json(alpha) << std::endl;
+        //                     std::cout << "beta: " << to_json(beta) << std::endl;
+        //                     std::cout << "phi_function: " << to_json(phi_function) << std::endl;
+        //                     throw "";
+        //                 }
+        //                 const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
+        //                 if (found[index]) {
+        //                     std::cout << "perm" << std::endl;
+        //                     std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+        //                     std::cout << "alpha: " << to_json(alpha) << std::endl;
+        //                     std::cout << "beta: " << to_json(beta) << std::endl;
+        //                     std::cout << "phi_function: " << to_json(phi_function) << std::endl;
+        //                     throw "";
+        //                 }
+        //                 found[index] = true;
+        //             }
+        //         }
+        //     }
+        // }
+        for (Scalar l = 1; l < n; ++l) {
+            auto psi = OrbitContainer(l + 1);
+            for (const auto &alpha_ : numberCache[l].skewMorphisms.skews) {
+                const auto &alpha = *alpha_;
+                if (alpha.c() % 2 != 1 || n % alpha.ordAut() != 0) {
+                    continue;
+                }
+                const Scalar m = alpha.ordAut();
+                for (const auto &beta_: numberCache[n / m].skewMorphisms.skews) {
+                    const auto &beta = *beta_;
+                    if (l % beta.r() != 0) {
                         continue;
                     }
-                    for (Scalar h = 0; h < n; ++h) {
-                        Function phi_function(n, 0);
-                        for (std::size_t i = 1; i <= n; ++i) {
-                            phi_function[i % n] = (phi_function[i - 1] + beta.orbitOf(h)[(alpha.orbit1(i - 1) - 1) / m]) % n;
-                        }
 
-                        bool a = true;
-                        auto visited = std::vector<bool>(n, false);
-                        Scalar t = 1;
-                        for (Scalar x = 0; !visited[t] || x % alpha.pi().size() != 0; ++x) {
-                            visited[t] = true;
-                            if ((t % alpha.r()) != alpha.pi(x)) {
-                                a = false;
-                                break;
-                            }
-                            t = phi_function[t];
-                        }
+                    for (Scalar f = 0; f < n / m; ++f) {
+                        Scalar ord_psi = calculate_orbit_container(n, m, beta, l, alpha, f, psi);
 
-                        const auto &powerQuotient = getSkewByIndex(numberCache[ord_beta].skewMorphisms, alpha.preservingSubgroups.find(m)->second);
-                        bool b = &quotient(beta) == &powerQuotient;
-
-                        bool c = true;
-
-                        for (Scalar x = 0; x < n; ++x) {
-                            Scalar phi_m_x = x;
-                            for (Scalar i = 0; i < m; ++i) {
-                                phi_m_x = phi_function[phi_m_x];
-                            }
-                            if (phi_m_x != beta.orbitOf(x)[1]) {
-                                c = false;
-                                break;
-                            }
-                        }
-
-                        if (!a) {
+                        bool e = l == ord_psi;
+                        if (!e) {
                             continue;
                         }
+
+                        // OrbitContainer psi;
+                        // psi.push_back(1);
+                        // for (Scalar i = 1; i < n; ++i) {
+                        //     Scalar t = (1 + (beta.orbitOf((psi.back() - 1) / m)[alpha.orbit1(1)] + f) * m) % n;
+                        //     if (t == 1) {
+                        //         break;
+                        //     }
+                        //     psi.push_back(t);
+                        // }
+                        Function phi_function;
+                        calculate_phi_function(n, alpha, psi, phi_function);
+
+                        bool a;
+                        validate_e1(alpha, psi, a);
+
+                        bool b;
+                        validate_e2(m, beta, l, alpha, b);
+
+                        bool c;
+                        validate_e3(n, m, beta, phi_function, c);
+
+                        bool d;
+                        validate_e4(n, m, alpha, phi_function, d);
+
+                        bool d2 = validate_e4_2(psi, phi_function);
+
+                        // bool d = true;
+                        // Scalar old = 1;
+                        // for (std::size_t index = 1; index < psi.size(); ++index) {
+                        //     const auto &x = psi[index];
+                        //     if (phi_function[old] != x) {
+                        //         d = false;
+                        //         break;
+                        //     }
+                        //     old = x;
+                        // }
+                        // d = d && (phi_function[old] == 1);
+
+                        // bool e = l == psi.size();
+
                         if (!b) {
+                            if (a && c && d) {
+                                std::cout << "ACD" << std::endl;
+                            }
+                            if (a && c && d2) {
+                                std::cout << "ACD2" << std::endl;
+                            }
+                            continue;
+                        }
+                        if (!a) {
                             continue;
                         }
                         if (!c) {
                             continue;
                         }
+                        if (!d2) {
+                            continue;
+                        }
 
                         if (!isPermutation(phi_function)) {
                             std::cout << "perm" << std::endl;
-                            std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+                            std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
                             std::cout << "alpha: " << to_json(alpha) << std::endl;
                             std::cout << "beta: " << to_json(beta) << std::endl;
                             std::cout << "phi_function: " << to_json(phi_function) << std::endl;
@@ -2704,7 +2929,7 @@ int main(int argc, char *argv[]) {
 
                         if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
                             std::cout << "skew" << std::endl;
-                            std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+                            std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
                             std::cout << "alpha: " << to_json(alpha) << std::endl;
                             std::cout << "beta: " << to_json(beta) << std::endl;
                             std::cout << "phi_function: " << to_json(phi_function) << std::endl;
@@ -2712,158 +2937,14 @@ int main(int argc, char *argv[]) {
                         }
                         const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
                         if (found[index]) {
-                            std::cout << "perm" << std::endl;
-                            std::cout << "n: " << n << ", m: " << m << ", h: " << h << std::endl;
+                            std::cout << "single" << std::endl;
+                            std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
                             std::cout << "alpha: " << to_json(alpha) << std::endl;
                             std::cout << "beta: " << to_json(beta) << std::endl;
                             std::cout << "phi_function: " << to_json(phi_function) << std::endl;
                             throw "";
                         }
                         found[index] = true;
-                    }
-                }
-            }
-        }
-        for (const Scalar m : number.divisors) {
-            if (m == 1) {
-                continue;
-            }
-            for (const auto &beta_: numberCache[n / m].skewMorphisms.skews) {
-                const auto &beta = *beta_;
-                for (Scalar l = 1; l < n; ++l) {
-                    for (const auto &alpha_ : numberCache[l].skewMorphisms.skews) {
-                        const auto &alpha = *alpha_;
-                        if (alpha.c() % 2 != 1 || alpha.ordAut() != m) {
-                            continue;
-                        }
-                        for (Scalar f = 0; f < n / m; ++f) {
-                            OrbitContainer psi(l + 1, 0);
-                            psi[0] = 1;
-                            Scalar ord_psi = 0;
-                            for (Scalar i = 1; i < l + 1; ++i) {
-                                psi[i] = (psi[i - 1] + beta.orbitOf(f)[alpha.orbitOf(i - 1)[1]] * m) % n;
-                                if (ord_psi == 0 && psi[i] == 1)
-                                {
-                                    ord_psi = i;
-                                }
-                            }
-
-                            bool e = l == ord_psi;
-                            if (!e) {
-                                continue;
-                            }
-
-                            // OrbitContainer psi;
-                            // psi.push_back(1);
-                            // for (Scalar i = 1; i < n; ++i) {
-                            //     Scalar t = (1 + (beta.orbitOf((psi.back() - 1) / m)[alpha.orbit1(1)] + f) * m) % n;
-                            //     if (t == 1) {
-                            //         break;
-                            //     }
-                            //     psi.push_back(t);
-                            // }
-                            Function phi_function(n, 0);
-                            for (std::size_t i = 1; i <= n; ++i) {
-                                phi_function[i % n] = (phi_function[i - 1] + psi[alpha.orbit1(i - 1)]) % n;
-                            }
-
-                            bool a = true;
-                            for (Scalar x = 0; x < psi.size(); ++x) {
-                                if ((psi[x] % alpha.r()) != alpha.pi(x)) {
-                                    a = false;
-                                    break;
-                                }
-                            }
-
-                            bool b = true;
-                            const auto &alpha_m = powerOf(alpha, *quotient(alpha).preservingSubgroups.find(m), numberCache[l].skewMorphisms);
-                            if (alpha_m.preservingSubgroups.find(beta.r()) != alpha_m.preservingSubgroups.end()) {
-                                const auto &powerQuotient = mod(alpha_m, beta.r());;
-                                b = &quotient(beta) == &powerQuotient;
-                            } else {
-                                b = false;
-                            }
-
-                            bool c = true;
-                            for (Scalar x = 0; x < n / m; ++x) {
-                                if (phi_function[x * m] != beta.orbitOf(x)[1] * m) {
-                                    c = false;
-                                    break;
-                                }
-                            }
-
-                            bool d = true;
-                            for (Scalar x = 0; x < n; ++x) {
-                                Scalar phi_m = m;
-                                for (Scalar i = 0; i < alpha.orbit1(x); ++i) {
-                                    phi_m = phi_function[phi_m];
-                                }
-                                if (phi_function[(x + m) % n] != (phi_function[x] + phi_m) % n) {
-                                    d = false;
-                                    break;
-                                }
-                            }
-
-                            // bool d = true;
-                            // Scalar old = 1;
-                            // for (std::size_t index = 1; index < psi.size(); ++index) {
-                            //     const auto &x = psi[index];
-                            //     if (phi_function[old] != x) {
-                            //         d = false;
-                            //         break;
-                            //     }
-                            //     old = x;
-                            // }
-                            // d = d && (phi_function[old] == 1);
-
-                            // bool e = l == psi.size();
-
-                            if (!a) {
-                                continue;
-                            }
-                            if (!b) {
-                                if (c && d && e) {
-                                    std::cout << "B" << std::endl;
-                                }
-                                continue;
-                            }
-                            if (!c) {
-                                continue;
-                            }
-                            if (!d) {
-                                continue;
-                            }
-
-                            if (!isPermutation(phi_function)) {
-                                std::cout << "perm" << std::endl;
-                                std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
-                                std::cout << "alpha: " << to_json(alpha) << std::endl;
-                                std::cout << "beta: " << to_json(beta) << std::endl;
-                                std::cout << "phi_function: " << to_json(phi_function) << std::endl;
-                                throw "";
-                            }
-                            const auto orbit1 = computeOrbit1(phi_function);
-                            const auto permutation = computePermutation(orbit1, phi_function);
-
-                            if (!isSkewMorphism({orbit1, OrbitContainer{alpha.orbit1()}}, permutation.orbits, phi_function)) {
-                                std::cout << "skew" << std::endl;
-                                std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
-                                std::cout << "alpha: " << to_json(alpha) << std::endl;
-                                std::cout << "beta: " << to_json(beta) << std::endl;
-                                std::cout << "phi_function: " << to_json(phi_function) << std::endl;
-                                throw "";
-                            }
-                            const auto index = number.skewMorphisms.skewIndexMap[{orbit1, OrbitContainer{alpha.orbit1()}}];
-                            if (found[index]) {
-                                std::cout << "single" << std::endl;
-                                std::cout << "n: " << n << ", m: " << m << ", l: " << l << ", f: " << f << std::endl;
-                                std::cout << "alpha: " << to_json(alpha) << std::endl;
-                                std::cout << "beta: " << to_json(beta) << std::endl;
-                                std::cout << "phi_function: " << to_json(phi_function) << std::endl;
-                                throw "";
-                            }
-                            found[index] = true;
-                        }
                     }
                 }
             }
