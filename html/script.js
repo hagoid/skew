@@ -1,11 +1,9 @@
 let checkboxAuto
 let checkboxCoset
 let checkboxOther
-let checkboxInv
 let autoVisible
 let cosetVisible
 let otherVisible
-let invVisible
 let modulo
 let moduloInput
 let selected
@@ -32,7 +30,6 @@ $.fn.linking = function() {
         'auto': autoVisible,
         'coset': cosetVisible,
         'other': otherVisible,
-        'inv': invVisible,
         'mod': modulo,
     }
     return this.each(function() {
@@ -46,7 +43,6 @@ let update = () => {
     $('.auto').toggle(autoVisible)
     $('.coset').toggle(cosetVisible)
     $('.other').toggle(otherVisible)
-    if (!invVisible) $('.inv-1,.pow-inv-1').hide()
     $('.n').countSelected()
     $('.skew').represent().linking()
     if (selected) selected.toggleClass('selected', false)
@@ -58,18 +54,15 @@ $(document).ready(() => {
     checkboxAuto = $('#checkbox-auto')
     checkboxCoset = $('#checkbox-coset')
     checkboxOther = $('#checkbox-other')
-    checkboxInv = $('#checkbox-inv')
     moduloInput = $('#modulo')
     let urlParams = new URLSearchParams(window.location.search)
     if (urlParams.has('auto')) checkboxAuto.prop('checked', urlParams.get('auto') === 'true')
     if (urlParams.has('coset')) checkboxCoset.prop('checked', urlParams.get('coset') === 'true')
     if (urlParams.has('other')) checkboxOther.prop('checked', urlParams.get('other') === 'true')
-    if (urlParams.has('inv')) checkboxInv.prop('checked', urlParams.get('inv') === 'true')
     if (urlParams.has('mod')) moduloInput.prop('value', urlParams.get('mod'))
     autoVisible = checkboxAuto.prop('checked')
     cosetVisible = checkboxCoset.prop('checked')
     otherVisible = checkboxOther.prop('checked')
-    invVisible = checkboxInv.prop('checked')
     modulo = moduloInput.prop('value')
     checkboxAuto.change(() => {
         autoVisible = checkboxAuto.prop('checked')
@@ -81,10 +74,6 @@ $(document).ready(() => {
     })
     checkboxOther.change(() => {
         otherVisible = checkboxOther.prop('checked')
-        update()
-    })
-    checkboxInv.change(() => {
-        invVisible = checkboxInv.prop('checked')
         update()
     })
     moduloInput.change(() => {

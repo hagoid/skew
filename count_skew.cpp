@@ -2433,12 +2433,6 @@ void printMato(std::ofstream &output, const SkewMorphism &skew, bool old = false
 void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::string &additionalClass, Scalar classSize) {
     const auto &q = quotient(skew);
     output << "\n<li class='skew " << additionalClass <<" n-" << skew.n() << " d-" << skew.d() << " h-" << skew.h() << " r-" << skew.r() << " s-" << skew.s() << " c-" << skew.c();
-    if (skew.inverseOrbit()) {
-        output << " inv-1";
-    }
-    if (skew.powerOfInverseOrbit) {
-        output << " pow-inv-1";
-    }
     auto &number = numberCache[skew.n()];
     for (const auto &sub: q.preservingSubgroups) {
         const auto &power = powerOf(skew, sub, number.skewMorphisms);
@@ -2448,7 +2442,7 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::strin
     output << "\nSkew morphsim class of size " << classSize << " <a class='link' href='#" << skew.hash << "'>#</a>";
     output << "\n  <span class='repr'></span>";
     output << "\n  of order " << std::to_string(skew.r());
-    output << " <a href='?auto=true&coset=true&other=true&inv=true#roots-" << skew.hash << "'>&radic;</a>";
+    output << " <a href='?auto=true&coset=true&other=true#roots-" << skew.hash << "'>&radic;</a>";
     output << "\n  with kernel of order " << std::to_string(skew.n() / skew.d());
     output << "\n  and smallest kernel generator " << std::to_string(skew.d());
     if (skew.d() == 1) {
@@ -2456,7 +2450,7 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::strin
     } else {
         output << "\n  and power function values [ " << to_string(skew.pi()) << " ]";
     }
-    output << " <a href='" << skew.r() << ".html?auto=true&coset=true&other=true&inv=true#" << q.hash << "'>#</a>";
+    output << " <a href='" << skew.r() << ".html?auto=true&coset=true&other=true#" << q.hash << "'>#</a>";
     output << "\n  and with periodicity " << std::to_string(q.d());
 
     output << "\n\n</pre>" << std::endl;
@@ -2649,8 +2643,6 @@ int main(int argc, char *argv[]) {
                "        <input type='checkbox' id='checkbox-auto' name='auto'><label for='checkbox-auto'>automorphisms</label>\n"
                "        <input type='checkbox' id='checkbox-coset' name='coset'><label for='checkbox-coset'>proper coset preserving</label>\n"
                "        <input type='checkbox' id='checkbox-other' name='other' checked><label for='checkbox-other'>proper coset non-preserving</label>\n"
-               "        <br />\n"
-               "        <input type='checkbox' id='checkbox-inv' name='inv'><label for='checkbox-inv'>power of -1 on orbit 1</label>\n"
                "        <br />\n"
                "        <input type='number' id='modulo' name='mod' value='" << n << "'> <label for='modulo'>modulo</label>\n"
                "        <h3>n = " << n << " = " << factorizationHtml(n) << "</h3>"
