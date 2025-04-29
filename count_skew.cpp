@@ -376,8 +376,8 @@ private:
 };
 
 PROFILE WeakClassRepresentant::WeakClassRepresentant(Permutation permutation, const SkewMorphism *quotient) : _permutation(std::move(permutation)), quotient(quotient){
-    if (quotient == nullptr || quotient->r() == 1) {
-        _ordAut = r();
+    if (r() == 1) {
+        _ordAut = n();
     } else {
         _ordAut = quotient->ordAut();
     }
@@ -1015,6 +1015,41 @@ PROFILE void computeHashForClass(const Class &c, SkewMorphisms &skewMorphisms) {
     const auto h = hash(**least);
     for (std::size_t i = c.begin; i < c.end; ++i) {
         skews[i]->hash = h;
+    }
+}
+
+struct QuotientComparator {
+    bool operator()(const SkewMorphism &lhs, const SkewMorphism &rhs) {
+        if (lhs.n() != rhs.n()) {
+            return lhs.n() < rhs.n();
+        }
+        if (lhs.c() != rhs.c()) {
+            return lhs.c() < rhs.c();
+        }
+        if (lhs.c() == 0 && rhs.c() == 0) {
+            return false;
+        }
+        const auto &lq = quotient(lhs);
+        const auto &rq = quotient(rhs);
+        if (operator()(lq, rq)) {
+            return true;
+        }
+        if (operator()(rq, lq)) {
+            return false;
+        }
+        return lhs.orbit1() < rhs.orbit1();
+    }
+    bool operator()(const std::unique_ptr<SkewMorphism> &lhs, const std::unique_ptr<SkewMorphism> &rhs) {
+        return operator()(*lhs, *rhs);
+    }
+};
+
+PROFILE void computeRepresentantForClass(Class &c, SkewMorphisms &skewMorphisms) {
+    auto &skews = skewMorphisms.skews;
+    const auto least = std::min_element(skews.begin() + c.begin, skews.begin() + c.end, QuotientComparator{});
+    c.representant = least - skews.begin();
+    if (c.representant < c.begin || c.representant >= c.end) {
+        throw "";
     }
 }
 
@@ -1744,6 +1779,7 @@ PROFILE void addSkewClassByRepresentant(const CompactSkewMorphism &compact, Perm
     }
     auto &c = number.skewMorphisms.classes[phiRepresentant.c()].back();
     computeHashForClass(c, number.skewMorphisms);
+    computeRepresentantForClass(c, number.skewMorphisms);
 }
 
 PROFILE bool quotientEquals(const WeakClassRepresentant &skew, const SkewMorphism &quotient) {
@@ -2439,10 +2475,9 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::strin
         output << " roots-" << power.hash;
     }
     output << "' id='" << skew.hash << "' data-repr='" << to_json(skew) << "' data-pi='" << to_json(skew.pi()) << "'><pre>";
-    output << "\nSkew morphsim class of size " << classSize << " <a class='link' href='#" << skew.hash << "'>#</a>";
+    output << "\nSkew morphsim class of size " << classSize;
     output << "\n  <span class='repr'></span>";
     output << "\n  of order " << std::to_string(skew.r());
-    output << " <a href='?auto=true&coset=true&other=true#roots-" << skew.hash << "'>&radic;</a>";
     output << "\n  with kernel of order " << std::to_string(skew.n() / skew.d());
     output << "\n  and smallest kernel generator " << std::to_string(skew.d());
     if (skew.d() == 1) {
@@ -2450,8 +2485,26 @@ void printHtml(std::ofstream &output, const SkewMorphism &skew, const std::strin
     } else {
         output << "\n  and power function values [ " << to_string(skew.pi()) << " ]";
     }
-    output << " <a href='" << skew.r() << ".html?auto=true&coset=true&other=true#" << q.hash << "'>#</a>";
     output << "\n  and with periodicity " << std::to_string(q.d());
+    if (skew.n() != 1) {
+        output << "\n  and with complexity " << std::to_string(skew.c());
+        output << "\n  and with auto-order " << std::to_string(skew.ordAut());
+    }
+    output << "\n  <a class='link' href='#" << skew.hash << "'>&phi;</a>";
+    output << " | <a href='?auto=true&coset=true&other=true#roots-" << skew.hash << "'>&radic;&phi;</a>";
+    output << " | <a href='" << skew.r() << ".html?auto=true&coset=true&other=true#" << q.hash << "'>&phi;'</a>";
+    if (skew.n() != 1) {
+        if (skew.c() % 2 == 1) {
+            const auto &pres = *q.preservingSubgroups.find(skew.ordAut());
+            const auto &power = powerOf(skew, pres, number.skewMorphisms);
+            output << " | <a href='?auto=true&coset=true&other=true#" << power.hash << "'>&phi;<sup>" << skew.ordAut() <<"</sup></a>";
+        } else {
+            const auto &number_nm = numberCache[skew.n() / skew.ordAut()];
+            const auto &pres = *skew.preservingSubgroups.find(skew.ordAut());
+            const auto &restr = number_nm.skewMorphisms.skews[pres.second];
+            output << " | <a href='" << skew.n() / skew.ordAut() << ".html?auto=true&coset=true&other=true#" << restr->hash << "'>&phi;|<sub>&lt;" << skew.ordAut() << "&gt;</sub></a>";
+        }
+    }
 
     output << "\n\n</pre>" << std::endl;
     output << "\n</li>" << std::endl;
@@ -2482,10 +2535,10 @@ void printHtml(std::ofstream &output, const Number &number) {
     auto &skewMorphisms = number.skewMorphisms;
     output << "\n<div class='n' id='n-" << n << "'>";
     output << "\n<pre>";
-    output << "\nNumber of selected skew morphism classes of C_" << n << " is <span class='count'>0</span>";
-    output << "\nTotal number of skew morphisms of C_" << n << " is " << getSkewCount(skewMorphisms);
-    output << "\nTotal number of skew morphism classes of C_" << n << " is " << getClassesCount(skewMorphisms);
-    output << "\nTotal number of automorphisms of C_" << n << " is " << number.phi;
+    output << "\nNumber of selected skew morphism classes of C<sub>" << n << "</sub> is <span class='count'>0</span>";
+    output << "\nTotal number of skew morphisms of C<sub>" << n << "</sub> is " << getSkewCount(skewMorphisms);
+    output << "\nTotal number of skew morphism classes of C<sub>" << n << "</sub> is " << getClassesCount(skewMorphisms);
+    output << "\nTotal number of automorphisms of C<sub>" << n << "</sub> is " << number.phi;
     output << "\n</pre>";
 
     output << "\n<ol>";
@@ -2583,7 +2636,7 @@ int main(int argc, char *argv[]) {
         if ((number.skewMorphisms.classes.size() == 4) != (number.powerOfTwo < 64 && cubeFree(number))) {
             printf("!!!! %d\n", n);
         }
-        
+
         std::ofstream file;
         file = std::ofstream{"../skew/" + std::to_string(number.n) + "_auto.txt"};
         for (std::size_t i = 0; i < 2; ++i) {
@@ -2629,9 +2682,11 @@ int main(int argc, char *argv[]) {
     for (auto n = A; n <= N; ++n) {
         std::ofstream output("../html/skew/" + std::to_string(n) + ".html");
         const auto prev = n > 1 ? n - 1 : n;
+        const auto next = n < N ? n + 1 : n;
         output <<
                "<html>\n"
                "  <head>\n"
+               "    <meta charset=\"utf-8\">\n"
                "    <script src='../jquery-3.6.4.min.js'></script>\n"
                "    <script src='../script.js'></script>\n"
                "    <link rel='stylesheet' href='../stylesheet.css'>\n"
@@ -2647,7 +2702,7 @@ int main(int argc, char *argv[]) {
                "        <input type='number' id='modulo' name='mod' value='" << n << "'> <label for='modulo'>modulo</label>\n"
                "        <h3>n = " << n << " = " << factorizationHtml(n) << "</h3>"
                "      </div>\n"
-               "      <a id='next' href='" << n + 1 << ".html'>" << n + 1 << "</a>\n"
+               "      <a id='next' href='" << next << ".html'>" << next << "</a>\n"
                "    </form>\n"
                 ;
         auto &number = numberCache[n];
@@ -2657,6 +2712,79 @@ int main(int argc, char *argv[]) {
                "  </body>\n"
                "</html>\n"
                 ;
+    }
+
+    {
+        std::ofstream output("../html/skew.html");
+
+        // --- Start generating HTML and writing to file ---
+        output << "<html>\n";
+        output << "  <head>\n";
+        output << "    <meta charset=\"utf-8\">\n";
+        output << "    <style>\n";
+        output << "      table, th, td {\n";
+        output << "        border: 1px solid black;\n";
+        output << "        border-collapse: collapse;\n";
+        output << "        font-weight: normal;\n";
+        output << "        text-align: center;\n";
+        output << "        padding-left: 5px;\n";
+        output << "        padding-right: 5px;\n";
+        output << "      }\n";
+        output << "      </style>\n";
+        output << "  </head>\n";
+        output << "  <body>\n";
+
+        // Explanatory divs
+        output << "    <div>\n";
+        output << "      On this site you can find a census of all skew morphisms of cyclic groups ℤ<sub>n</sub> for each integer n from " << A << " to " << N << ". <br>\n";
+        output << "      Details for a given n are provided at skew/n, where we list total number of skew morphisms and automorphisms of ℤ<sub>n</sub>.\n";
+        output << "    </div>\n";
+        output << "    <div style=\"padding-top: 10px;\">\n";
+        output << "      For every n we list a representative of each equivalence class, where two skew morphisms φ and Ψ are equivalent if and only if Ψ=α<sup>-1</sup>φ<sup>i</sup>α\n";
+        output << "      for some automorphism α of ℤ<sub>n</sub> and a positive integer i relatively prime to the order of φ.\n";
+        output << "      <br>For each representative we list its order, the order of its kernel, the smallest generator k of its kernel,\n";
+        output << "      values taken by its power function at elements 0 to k-1, its periodicity, its complexity and its auto-order..\n";
+        output << "      <br>It is possible to filter all classes based on whether they contain: automorphisms, proper coset-preserving skew morphisms, non-coset-preserving skew morphisms.\n";
+        output << "      <br>It is also possible to display representatives modulo any integer.\n";
+        output << "    </div>\n";
+        output << "    <div style=\"padding-top: 10px;\">\n";
+        output << "      The three clickable links provided with each class redirects to:<br>\n";
+        output << "      1. an unique identifier of a given class<br>\n";
+        output << "      2. a list of classes that contain some root of the listed representative<br>\n";
+        output << "      3. a class that contains the skew morphism derived from the listed representative<br>\n";
+        output << "      4. a class that contains either the restriction of the listed representative to &lt;m&gt; for even complexity or the listed representative raised to m-th power for odd complexity; where m is its auto-order<br>\n";
+        output << "    </div>\n";
+        output << "    <div style=\"padding-top: 10px;\">\n";
+        output << "      Enumeration and cencus of skew morphisms of cyclic groups ℤ<sub>n</sub> for each integer n from " << A << " to " << N << " can be found below.\n";
+        output << "    </div>\n";
+
+        // Table start
+        output << "    <div style=\"padding-top: 10px;\">\n";
+        output << "    <table class=\"table table-bordered table-hover table-condensed\">\n";
+        output << "      <thead><tr><th title=\"Field #1\">Order of ℤ<sub>n</sub></th>\n";
+        output << "      <th title=\"Field #2\">Number of skew morphisms</th>\n";
+        output << "      </tr></thead>\n";
+        output << "      <tbody>\n";
+
+        for (auto n = A; n <= N; ++n) {
+            auto &number = numberCache[n];
+            output << "      <tr>\n";
+            output << "      <td><a href=\"skew/" << n << ".html\" target=\"_blank\" rel=\"noopener noreferrer\">" << n << "</a></td>\n";
+            output << "      <td align=\"right\">" << getSkewCount(number.skewMorphisms) << "</td>\n";
+            output << "      </tr>\n"; // Added newline for better formatting
+
+        }
+
+        // Table end
+        output << "      </tbody>\n";
+        output << "    </table>\n";
+        output << "    </div>\n"; // Closing the padding div
+
+        // Closing body and html
+        output << "  </body>\n";
+        output << "</html>\n";
+        // --- End generating HTML ---
+
     }
 
     for (const auto &complexity: complexities) {

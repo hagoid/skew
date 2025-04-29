@@ -46,8 +46,10 @@ let update = () => {
     $('.n').countSelected()
     $('.skew').represent().linking()
     if (selected) selected.toggleClass('selected', false)
-    selected = $(window.location.hash + ",." + window.location.hash.split('#')[1])
-    selected.toggleClass('selected', true)
+    if (window.location.hash) {
+        selected = $(window.location.hash + ",." + window.location.hash.split('#')[1])
+        selected.toggleClass('selected', true)
+    }
 }
 
 $(document).ready(() => {
